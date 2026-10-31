@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ZNL Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: console de operador — barra de status, grade de módulos à esquerda, terminal à direita; empilha no celular */
+:root{
+  --bg:#050806;
+  --panel:#08110b;
+  --line:#163a22;
+  --fg:#b8f5c8;
+  --dim:#5f9a72;
+  --phos:#3dff7a;
+  --amber:#ffb347;
+  --red:#ff5f5f;
+  --display:"VT323","IBM Plex Mono",ui-monospace,monospace;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{min-height:100%}
+body{
+  background:var(--bg);color:var(--fg);font-family:var(--mono);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:16px 28px;
+}
+#rain{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;opacity:.16;z-index:0}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.22) 2px 3px)}
+.wrap{position:relative;z-index:2;max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+/* status bar */
+.status{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;border:1px solid var(--line);background:var(--panel);
+  padding:6px 12px;font-size:12px;color:var(--dim);letter-spacing:.06em;text-transform:uppercase;font-variant-numeric:tabular-nums}
+.status b{color:var(--phos);font-weight:500}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--phos);box-shadow:0 0 8px var(--phos);margin-right:6px;animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.status .sp{flex:1}
+
+/* hero */
+.hero{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:flex-end;justify-content:space-between}
+.logo{margin:0;font-family:var(--display);font-size:clamp(44px,9vw,92px);line-height:.85;color:var(--phos);
+  text-shadow:0 0 12px rgba(61,255,122,.55),0 0 2px var(--phos);letter-spacing:.02em}
+.logo span{color:var(--amber);text-shadow:0 0 12px rgba(255,179,71,.5)}
+.tagline{margin:0;color:var(--dim);max-width:46ch;font-size:13px}
+.tagline kbd{font-family:var(--mono);border:1px solid var(--line);padding:0 5px;color:var(--fg);background:var(--panel)}
+
+/* grid */
+.main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:860px){.main{grid-template-columns:minmax(0,1fr)}}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 8px;font-family:var(--display);
+  font-size:24px;font-weight:400;color:var(--fg);letter-spacing:.04em}
+.sec-h small{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.tile-w{position:relative;min-width:0}
+.tile{display:flex;flex-direction:column;gap:6px;height:100%;text-decoration:none;border:1px solid var(--line);background:var(--panel);
+  padding:12px 14px 12px;position:relative;transition:border-color .15s,background .15s,transform .15s;min-width:0}
+.tile::before{content:"";position:absolute;left:0;top:0;bottom:0;width:0;background:var(--phos);transition:width .15s}
+.tile:hover,.tile:focus-visible{border-color:var(--phos);background:#0b1a10;outline:none}
+.tile:hover::before,.tile:focus-visible::before{width:3px}
+.tile:focus-visible .t-name::after{content:" ◀";color:var(--amber)}
+.t-top{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--dim);letter-spacing:.08em}
+.t-idx{color:var(--amber);font-variant-numeric:tabular-nums}
+.chip{border:1px solid currentColor;padding:0 6px;text-transform:uppercase;font-size:10px;letter-spacing:.1em}
+.chip.on{color:var(--phos)}
+.chip.dev{color:var(--amber)}
+.t-name{font-family:var(--display);font-size:28px;line-height:1;color:var(--fg)}
+.tile:hover .t-name{color:var(--phos);animation:glitch .3s steps(2) 1}
+@keyframes glitch{0%{transform:translateX(0)}33%{transform:translateX(-2px);text-shadow:2px 0 var(--amber)}66%{transform:translateX(2px);text-shadow:-2px 0 var(--red)}100%{transform:none}}
+.t-desc{color:var(--fg);opacity:.8;font-size:12.5px;margin:0;flex:1}
+.t-url{color:var(--dim);font-size:11px;overflow-wrap:anywhere}
+.t-del{position:absolute;right:8px;bottom:8px;background:none;border:1px solid var(--line);color:var(--dim);font:11px var(--mono);
+  padding:1px 6px;cursor:pointer;z-index:3}
+.t-del:hover{color:var(--red);border-color:var(--red)}
+.tile.add{align-items:center;justify-content:center;text-align:center;border-style:dashed;color:var(--dim);cursor:pointer;
+  font:inherit;min-height:132px;width:100%}
+.tile.add .t-name{color:var(--dim)}
+.tile.add:hover .t-name{color:var(--phos)}
+
+/* terminal */
+.term{border:1px solid var(--line);background:#030604;display:flex;flex-direction:column;min-height:360px;max-height:560px}
+.term-bar{display:flex;gap:6px;align-items:center;border-bottom:1px solid var(--line);padding:6px 10px;font-size:11px;color:var(--dim);letter-spacing:.08em}
+.term-bar i{width:9px;height:9px;border:1px solid var(--dim);display:inline-block}
+.term-bar span{margin-left:auto}
+#out{flex:1;overflow-y:auto;padding:10px 12px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:0}
+#out .ok{color:var(--phos)} #out .warn{color:var(--amber)} #out .err{color:var(--red)} #out .dim{color:var(--dim)}
+#out .cmd{color:var(--fg)} #out a{color:var(--amber)}
+.prompt{display:flex;align-items:center;gap:8px;border-top:1px solid var(--line);padding:8px 12px}
+.prompt label{color:var(--phos);white-space:nowrap;font-size:13px}
+#cmd{flex:1;min-width:0;background:transparent;border:0;color:var(--fg);font:13px var(--mono);caret-color:var(--phos);outline:none}
+
+/* add panel */
+.panel{border:1px solid var(--amber);background:var(--panel);padding:14px;display:flex;flex-direction:column;gap:10px}
+.panel h3{margin:0;font-family:var(--display);font-weight:400;font-size:26px;color:var(--amber)}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:11px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.field input,.field select{background:#030604;border:1px solid var(--line);color:var(--fg);font:13px var(--mono);padding:7px 8px;width:100%}
+.field input:focus,.field select:focus{border-color:var(--phos);outline:none}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:none;border:1px solid var(--phos);color:var(--phos);font:13px var(--mono);padding:6px 14px;cursor:pointer;letter-spacing:.06em}
+.btn:hover{background:var(--phos);color:var(--bg)}
+.btn.ghost{border-color:var(--line);color:var(--dim)}
+.btn.ghost:hover{background:var(--line);color:var(--fg)}
+.form-err{color:var(--red);font-size:12px;min-height:1em;margin:0}
+footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<canvas id="rain" aria-hidden="true"></canvas>
+<div class="wrap">
+  <div class="status" role="status">
+    <span><span class="dot"></span><b>online</b></span>
+    <span>host <b>znl-hub</b></span>
+    <span>módulos <b id="count">0</b></span>
+    <span class="sp"></span>
+    <span>brt <b id="clock">--:--:--</b></span>
+    <span>uptime <b id="uptime">00:00</b></span>
+  </div>
+
+  <header class="hero">
+    <h1 class="logo">ZNL<span>://</span>HUB</h1>
+    <p class="tagline">Central de acesso às suas ferramentas. Clique em um módulo, aperte o número dele <kbd>1</kbd>–<kbd>9</kbd>, ou digite <kbd>help</kbd> no terminal. <kbd>/</kbd> foca o terminal.</p>
+  </header>
+
+  <section id="addPanel" class="panel" hidden aria-labelledby="addTitle">
+    <h3 id="addTitle">&gt; registrar novo módulo</h3>
+    <form id="addForm" novalidate>
+      <div class="fields">
+        <div class="field"><label for="f-name">Nome</label><input id="f-name" maxlength="28" placeholder="Ex.: Controle de Prazos" required></div>
+        <div class="field"><label for="f-url">Endereço (URL)</label><input id="f-url" placeholder="https://meu-app.pages.dev" required></div>
+        <div class="field"><label for="f-desc">Descrição curta</label><input id="f-desc" maxlength="90" placeholder="O que essa ferramenta faz"></div>
+        <div class="field"><label for="f-tag">Tipo</label>
+          <select id="f-tag"><option>dashboard</option><option>app</option><option>calculadora</option><option>relatório</option><option>utilitário</option></select></div>
+        <div class="field"><label for="f-status">Status</label>
+          <select id="f-status"><option value="on">online</option><option value="dev">em construção</option></select></div>
+      </div>
+      <p class="form-err" id="formErr"></p>
+      <div class="btns"><button class="btn" type="submit">Registrar</button><button class="btn ghost" type="button" id="cancelAdd">Cancelar</button></div>
+    </form>
+  </section>
+
+  <div class="main">
+    <section aria-labelledby="modsTitle">
+      <h2 class="sec-h" id="modsTitle">// módulos <small>↑↓←→ navega · enter abre</small></h2>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section class="term" aria-label="Terminal">
+      <div class="term-bar"><i></i><i></i><i></i><span>filipe@znl-hub: ~</span></div>
+      <div id="out" aria-live="polite"></div>
+      <form class="prompt" id="cmdForm" autocomplete="off">
+        <label for="cmd">filipe@znl-hub:~$</label>
+        <input id="cmd" spellcheck="false" autocapitalize="off" placeholder="help">
+      </form>
+    </section>
+  </div>
+
+  <footer>Módulos que você registrar ficam salvos neste navegador. Use <b>export</b> no terminal para copiar a lista e fixá-la no código.</footer>
+</div>
+
+<script>
+(function(){
+  // ===== Ferramentas fixas: edite aqui para deixá-las permanentes =====
+  const BASE_TOOLS = [
+    { id:"painel-tce", name:"Painel TCE", url:"https://painel-tce.pages.dev",
+      desc:"Painel de acompanhamento publicado no Cloudflare Pages.", tag:"dashboard", status:"on" },
+    { id:"pr990", name:"Obra completa PR990", url:"https://filipezanella1.github.io/PR990-Obra-completa/",
+      desc:"Acompanhamento da obra completa da PR-990.", tag:"dashboard", status:"on" },
+    { id:"medicao-dro", name:"Medição → DRO", url:"medicao-dro.html",
+      desc:"Roteiro mensal do DRO da obra 515: lê medição do DER, NF e CEQ e gera tudo pronto para colar.", tag:"app", status:"on" },
+    { id:"claude", name:"Claude", url:"https://claude.ai/new",
+      desc:"Abre uma conversa com o Claude. No terminal: claude <seu pedido>.", tag:"assistente", status:"on" }
+  ];
+  const norm = u => String(u||"").replace(/\/+$/,"").toLowerCase();
+  const KEY = "znl.tools.v1";
+  const store = {
+    get(){ try{ return JSON.parse(localStorage.getItem(KEY)) || []; }catch(e){ return []; } },
+    set(v){ try{ localStorage.setItem(KEY, JSON.stringify(v)); }catch(e){} }
+  };
+  let custom = store.get();
+  const all = () => BASE_TOOLS.map(t=>({...t,fixed:true}))
+    .concat(custom.filter(c=>!BASE_TOOLS.some(b=>norm(b.url)===norm(c.url))));
+
+  const $ = s => document.querySelector(s);
+  const tilesEl = $("#tiles"), out = $("#out"), cmd = $("#cmd");
+  const host = u => { try{ return new URL(u).host; }catch(e){ return u; } };
+  const pad = n => String(n).padStart(2,"0");
+  const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  function render(){
+    const list = all();
+    $("#count").textContent = list.length;
+    tilesEl.innerHTML = list.map((t,i)=>`
+      <div class="tile-w">
+        <a class="tile" href="${esc(t.url)}" target="_blank" rel="noopener" data-i="${i}">
+          <div class="t-top"><span class="t-idx">[${pad(i+1)}] ${esc(t.tag||"app")}</span>
+            <span class="chip ${t.status==="dev"?"dev":"on"}">${t.status==="dev"?"em obra":"online"}</span></div>
+          <div class="t-name">${esc(t.name)}</div>
+          <p class="t-desc">${esc(t.desc||"Sem descrição.")}</p>
+          <div class="t-url">→ ${esc(host(t.url))}</div>
+        </a>
+        ${t.fixed?"":`<button class="t-del" data-del="${i}" aria-label="Remover ${esc(t.name)}">rm</button>`}
+      </div>`).join("") +
+      `<div class="tile-w"><button class="tile add" id="addTile" type="button"><div class="t-name">+ novo módulo</div><span class="t-url">registrar ferramenta</span></button></div>`;
+    $("#addTile").onclick = openAdd;
+    tilesEl.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>removeAt(+b.dataset.del));
+    tilesEl.querySelectorAll("a.tile").forEach(a=>a.addEventListener("click",()=>log(`> abrindo ${all()[+a.dataset.i].name}…`,"ok")));
+  }
+
+  // ===== terminal =====
+  function log(text, cls){ const d=document.createElement("div"); if(cls) d.className=cls; d.innerHTML=text; out.appendChild(d); out.scrollTop=out.scrollHeight; }
+  function find(arg){
+    const list = all(); if(!arg) return -1;
+    const n = parseInt(arg,10);
+    if(!isNaN(n) && n>=1 && n<=list.length) return n-1;
+    const q = arg.toLowerCase();
+    return list.findIndex(t=>t.name.toLowerCase().includes(q)||t.id===q);
+  }
+  function openAt(i){
+    const t = all()[i], a = tilesEl.querySelector(`a.tile[data-i="${i}"]`);
+    log(`> conectando a <b>${esc(t.name)}</b> [${esc(host(t.url))}] … <span class="ok">ok</span>`, "ok");
+    log(`  se não abriu, <a href="${esc(t.url)}" target="_blank" rel="noopener">clique aqui</a>`, "dim");
+    if(a) a.click();
+  }
+  let pendingRm = -1;
+  function removeAt(i){
+    const t = all()[i]; if(!t) return;
+    if(t.fixed){ log(`! ${esc(t.name)} é fixo no código e não pode ser removido daqui.`,"warn"); return; }
+    custom = custom.filter(c=>c.id!==t.id); store.set(custom); render();
+    log(`- módulo ${esc(t.name)} removido.`,"warn");
+  }
+  const HELP = [
+    ["ls [filtro]","lista os módulos"],["open &lt;n|nome&gt;","abre uma ferramenta (atalho: só o número)"],
+    ["add","registra um novo módulo"],["rm &lt;n&gt;","remove um módulo que você registrou"],
+    ["export","copia a lista em JSON para colar no código"],["matrix","liga/desliga a chuva de fundo"],
+    ["claude &lt;pedido&gt;","abre uma conversa com o Claude já com o seu pedido"],
+    ["whoami · date · clear","utilitários"]
+  ];
+  function askClaude(text){
+    const apps = all().filter(t=>t.id!=="claude").map(t=>`- ${t.name}: ${t.url}`).join("\n");
+    const q = text ? `${text}\n\n(Enviado pelo ZNL Hub. Meus apps:\n${apps})` : "";
+    const url = "https://claude.ai/new" + (q ? "?q=" + encodeURIComponent(q) : "");
+    log(`> abrindo conversa com o Claude${text?" com o seu pedido":""}…`,"ok");
+    log(`  se não abriu, <a href="${esc(url)}" target="_blank" rel="noopener">clique aqui</a>`,"dim");
+    const a=document.createElement("a"); a.href=url; a.target="_blank"; a.rel="noopener"; document.body.appendChild(a); a.click(); a.remove();
+  }
+  const cmds = {
+    help(){ log("comandos disponíveis:","dim"); HELP.forEach(([c,d])=>log(`  <span class="ok">${c.padEnd(22," ")}</span>${d}`)); },
+    ls(arg){
+      const q=(arg||"").toLowerCase();
+      const rows = all().map((t,i)=>({t,i})).filter(({t})=>!q||(t.name+t.tag+t.desc).toLowerCase().includes(q));
+      if(!rows.length) return log("nenhum módulo encontrado.","warn");
+      rows.forEach(({t,i})=>log(`  <span class="warn">[${pad(i+1)}]</span> ${esc(t.name.padEnd(22," "))} <span class="dim">${esc(t.tag||"")} · ${esc(host(t.url))}</span>`));
+    },
+    open(arg){ const i=find(arg); i<0 ? log(`! módulo não encontrado: ${esc(arg||"(vazio)")}. Use ls.`,"err") : openAt(i); },
+    add(){ openAdd(); log("> formulário de registro aberto acima.","dim"); },
+    rm(arg){
+      const i=find(arg); if(i<0) return log("! informe o número do módulo. Ex.: rm 2","err");
+      if(all()[i].fixed) return removeAt(i);
+      if(pendingRm===i){ pendingRm=-1; return removeAt(i); }
+      pendingRm=i; log(`? confirme repetindo: rm ${i+1}`,"warn");
+    },
+    export(){
+      const json = JSON.stringify(all().map(({fixed,...t})=>t),null,2);
+      const done=()=>log("+ lista copiada. Cole no lugar de BASE_TOOLS no código.","ok");
+      try{ navigator.clipboard.writeText(json).then(done,()=>log(esc(json),"dim")); }catch(e){ log(esc(json),"dim"); }
+    },
+    matrix(){ rainOn=!rainOn; log(`> chuva ${rainOn?"ligada":"desligada"}.`,"dim"); },
+    claude(arg){ askClaude(arg); },
+    whoami(){ log("filipe · operador do znl-hub","ok"); },
+    date(){ log(new Date().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",dateStyle:"full",timeStyle:"medium"})); },
+    clear(){ out.innerHTML=""; }
+  };
+  const hist=[]; let hp=0;
+  $("#cmdForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const raw=cmd.value.trim(); cmd.value=""; if(!raw) return;
+    hist.push(raw); hp=hist.length;
+    log(`<span class="ok">$</span> ${esc(raw)}`,"cmd");
+    const [c,...rest]=raw.split(/\s+/); const arg=rest.join(" ");
+    if(/^\d+$/.test(c)) return cmds.open(c);
+    if(c!=="rm") pendingRm=-1;
+    const fn=cmds[c.toLowerCase()]; fn ? fn(arg) : log(`! comando desconhecido: ${esc(c)}. Digite help.`,"err");
+  });
+  cmd.addEventListener("keydown",e=>{
+    if(e.key==="ArrowUp"&&hist.length){ hp=Math.max(0,hp-1); cmd.value=hist[hp]; e.preventDefault(); }
+    if(e.key==="ArrowDown"&&hist.length){ hp=Math.min(hist.length,hp+1); cmd.value=hist[hp]||""; e.preventDefault(); }
+  });
+
+  // ===== add form =====
+  const panel=$("#addPanel");
+  function openAdd(){ panel.hidden=false; $("#formErr").textContent=""; $("#f-name").focus(); }
+  $("#cancelAdd").onclick=()=>{ panel.hidden=true; };
+  $("#addForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const name=$("#f-name").value.trim(); let url=$("#f-url").value.trim();
+    if(!name) return $("#formErr").textContent="Dê um nome ao módulo.";
+    if(url && !/^https?:\/\//i.test(url)) url="https://"+url;
+    try{ new URL(url); }catch(_){ return $("#formErr").textContent="Endereço inválido. Ex.: https://meu-app.pages.dev"; }
+    custom.push({ id:"m"+Date.now(), name, url, desc:$("#f-desc").value.trim(), tag:$("#f-tag").value, status:$("#f-status").value });
+    store.set(custom); render(); e.target.reset(); panel.hidden=true;
+    log(`+ módulo <b>${esc(name)}</b> registrado como [${pad(all().length)}].`,"ok");
+  });
+
+  // ===== atalhos globais =====
+  document.addEventListener("keydown",e=>{
+    const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if(e.key==="/"&&!typing){ e.preventDefault(); cmd.focus(); return; }
+    if(typing) return;
+    if(/^[1-9]$/.test(e.key)){ const i=+e.key-1; if(i<all().length){ e.preventDefault(); openAt(i); } return; }
+    const tiles=[...tilesEl.querySelectorAll(".tile")];
+    const cur=tiles.indexOf(document.activeElement);
+    if(!["ArrowRight","ArrowLeft","ArrowDown","ArrowUp"].includes(e.key)) return;
+    e.preventDefault();
+    if(cur<0){ tiles[0].focus(); return; }
+    const cols=Math.max(1,Math.round(tilesEl.clientWidth/tiles[0].offsetWidth));
+    const step={ArrowRight:1,ArrowLeft:-1,ArrowDown:cols,ArrowUp:-cols}[e.key];
+    tiles[Math.min(tiles.length-1,Math.max(0,cur+step))].focus();
+  });
+
+  // ===== relógio =====
+  const t0=Date.now();
+  function tick(){
+    $("#clock").textContent=new Date().toLocaleTimeString("pt-BR",{timeZone:"America/Sao_Paulo"});
+    const s=Math.floor((Date.now()-t0)/1000); $("#uptime").textContent=pad(Math.floor(s/60))+":"+pad(s%60);
+  }
+  tick(); setInterval(tick,1000);
+
+  // ===== chuva de fundo =====
+  const cv=$("#rain"), cx=cv.getContext("2d");
+  const reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let rainOn=!reduce, drops=[], fs=16;
+  const glyphs="01アイウエオカキクケコサシスセソ<>/{}#$%TCE".split("");
+  function size(){ cv.width=innerWidth; cv.height=innerHeight; drops=Array(Math.ceil(cv.width/fs)).fill(0).map(()=>Math.random()*-50); }
+  size(); addEventListener("resize",size);
+  function draw(){
+    if(rainOn){
+      cx.fillStyle="rgba(5,8,6,.12)"; cx.fillRect(0,0,cv.width,cv.height);
+      cx.fillStyle="#3dff7a"; cx.font=fs+"px monospace";
+      drops.forEach((y,i)=>{ cx.fillText(glyphs[(Math.random()*glyphs.length)|0],i*fs,y*fs);
+        drops[i]= y*fs>cv.height&&Math.random()>.975 ? 0 : y+1; });
+    } else cx.clearRect(0,0,cv.width,cv.height);
+    setTimeout(()=>requestAnimationFrame(draw),55);
+  }
+  draw();
+
+  // ===== boot =====
+  render();
+  [["ZNL-HUB v1.1 · sistema iniciado","ok"],
+   [`${all().length} módulo(s) carregado(s) · conexão segura`,"dim"],
+   ["digite <span class='ok'>help</span> para ver os comandos, ou <span class='ok'>claude &lt;pedido&gt;</span> para falar com o Claude.",""]]
+   .forEach(([t,c])=>log(t,c));
+})();
+</script>
+
+</body>
+</html>

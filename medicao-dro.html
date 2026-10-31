@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Medição → DRO PR-990</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+/* Layout: console de uma coluna — linha de comando (arquivo) → painel de status → tabela da PLAN. CONTROLE */
+:root{
+  --bg:#0b0f0d; --panel:#111814; --line:#1f2b24; --fg:#cfe3d6; --dim:#7c9387;
+  --accent:#5fd38d; --accent-ink:#06120b; --warn:#e8b34b; --bad:#ef6b5b; --hl:#16241c;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --bg:#f3f6f4; --panel:#ffffff; --line:#d5ded8; --fg:#13241a; --dim:#5c7366;
+  --accent:#167a43; --accent-ink:#ffffff; --warn:#9a6a00; --bad:#b3261e; --hl:#e6f1ea; color-scheme:light } }
+:root[data-theme="light"]{
+  --bg:#f3f6f4; --panel:#ffffff; --line:#d5ded8; --fg:#13241a; --dim:#5c7366;
+  --accent:#167a43; --accent-ink:#ffffff; --warn:#9a6a00; --bad:#b3261e; --hl:#e6f1ea; color-scheme:light }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+header{display:grid;gap:6px}
+.prompt{font:500 12px var(--mono);color:var(--dim);letter-spacing:.04em}
+.prompt b{color:var(--accent);font-weight:500}
+h1{font:600 clamp(24px,4vw,34px)/1.1 var(--mono);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 span{color:var(--accent)}
+.lead{color:var(--dim);max-width:68ch;margin:0}
+.drop{border:1px dashed var(--line);background:var(--panel);border-radius:6px;padding:22px;display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;justify-content:space-between;transition:border-color .15s,background .15s}
+.drop.over{border-color:var(--accent);background:var(--hl)}
+.drop .t{display:grid;gap:2px;min-width:0}
+.drop .t strong{font:600 15px var(--mono)}
+.drop .t small{color:var(--dim)}
+.btn{font:600 13px var(--mono);border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);padding:9px 14px;border-radius:4px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn:disabled{opacity:.4;cursor:default}
+input[type=file]{display:none}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.cell{background:var(--panel);padding:12px 14px;display:grid;gap:4px;min-width:0}
+.lbl{font:500 11px var(--sans);text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.val{font:600 16px var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.val small{font-weight:400;font-size:12px;color:var(--dim)}
+select{font:600 14px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:4px 6px;max-width:100%}
+.pill{display:inline-block;font:600 11px var(--mono);padding:2px 8px;border-radius:99px;border:1px solid currentColor;letter-spacing:.03em}
+.ok{color:var(--accent)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.dest{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:14px 16px}
+.dest p{margin:0;font:500 14px var(--mono)}
+.dest code{color:var(--accent);font:600 15px var(--mono)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+label.chk{display:flex;gap:6px;align-items:center;color:var(--dim);font-size:13px;cursor:pointer}
+.steps{display:grid;gap:12px}
+.step{display:grid;grid-template-columns:auto 1fr;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.sn{font:600 14px var(--mono);color:var(--accent-ink);background:var(--accent);width:26px;height:26px;border-radius:4px;display:grid;place-items:center}
+.sb{display:grid;gap:8px;min-width:0}
+.sb h3{margin:0;font:600 14px var(--mono)}
+.sb p{margin:0;color:var(--dim);max-width:75ch}
+.sb code{color:var(--accent);font:600 13px var(--mono)}
+.kv{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;font:12px var(--sans);color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+.kv code{text-transform:none;letter-spacing:0;background:var(--bg);border:1px solid var(--line);padding:3px 8px;border-radius:4px;overflow-wrap:anywhere}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 12px}
+.form label{display:grid;gap:3px;font:500 11px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--dim);min-width:0}
+.form input,.form select{font:600 14px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;width:100%;min-width:0;text-transform:none;letter-spacing:0}
+.checks{list-style:none;margin:0;padding:0;display:grid;gap:3px;font:12px var(--mono)}
+.checks li::before{content:"● ";}
+.note{font-size:12px}
+.tbl.mini{max-height:none}
+.tbl.mini table{min-width:420px}
+.msg{font:500 12px var(--mono);min-height:1.2em;color:var(--accent)}
+.alert{border:1px solid var(--warn);color:var(--fg);background:var(--panel);border-radius:6px;padding:12px 14px;display:grid;gap:6px}
+.alert h3{margin:0;font:600 13px var(--mono);color:var(--warn)}
+.alert ul{margin:0;padding-left:18px;font:12px var(--mono);color:var(--dim)}
+.tablebar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center}
+.tablebar h2{margin:0;font:600 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--panel);max-height:70vh}
+table{border-collapse:collapse;width:100%;min-width:640px;font:13px var(--mono);font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:var(--panel);text-align:left;font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.07em;color:var(--dim);padding:8px 10px;border-bottom:1px solid var(--line);z-index:1}
+td{padding:5px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+td.r{color:var(--dim)}
+tr.h td{color:var(--dim);font-weight:600;background:var(--bg)}
+tr.has td.q{color:var(--accent);font-weight:600}
+tr.miss td.q{color:var(--dim)}
+.tag{font:500 10px var(--mono);color:var(--warn);margin-left:6px}
+footer{color:var(--dim);font-size:12px;max-width:80ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+  <header>
+    <div class="prompt"><a href="./" style="color:inherit;text-decoration:none" title="Voltar ao hub"><b>znl@hub</b></a>:~/pr990$ medicao2dro</div>
+    <h1>Medição <span>→</span> DRO</h1>
+    <p class="lead">Solte o relatório de medição do DER (PDF) ou a planilha de medição (xlsx). A página casa os 269 serviços com a PLAN. CONTROLE do DRO e devolve o roteiro do mês para o DRO: PLAN. CONTROLE, PRODUÇÃO, NOTAS FISCAIS, CONTROLE DE MEDIÇÕES, MEDIÇÕES e MEDIÇÕES CEQ, prontos para colar.</p>
+  </header>
+
+  <label class="drop" id="drop" for="file">
+    <div class="t">
+      <strong id="dropTitle">Arraste os arquivos do mês aqui</strong>
+      <small id="dropSub">Relatório de Quantidades Executadas (PDF) ou "Medição Resumo" (xlsx) · NFS-e (PDF) · Medição de equipamentos CEQ (xlsx) — pode soltar todos juntos</small>
+    </div>
+    <span class="btn">Escolher arquivo</span>
+    <input type="file" id="file" accept=".pdf,.xlsx,.xlsm" multiple>
+  </label>
+
+  <section class="status" aria-label="Resumo">
+    <div class="cell"><span class="lbl">Fonte</span><span class="val" id="sFonte">—</span></div>
+    <div class="cell"><span class="lbl">Mês da produção</span><span class="val"><select id="mes" aria-label="Mês da produção"></select></span></div>
+    <div class="cell"><span class="lbl">Serviços casados</span><span class="val" id="sCasados">—</span></div>
+    <div class="cell"><span class="lbl">Conferência R$ (qtd × preço P0)</span><span class="val" id="sConf">—</span></div>
+  </section>
+
+  <section class="steps" aria-label="Roteiro do mês">
+    <div class="step">
+      <div class="sn">1</div>
+      <div class="sb">
+        <h3>PLAN. CONTROLE · quantidades do mês</h3>
+        <p>Clique em <code id="dest">PLAN. CONTROLE › AS485</code> e use <b>Colar especial › Valores</b> (298 linhas, até a 782). A coluna <code id="prodCalc">CQ</code> calcula o R$ sozinha.</p>
+        <div class="actions">
+          <label class="chk"><input type="checkbox" id="zeros" checked> zeros em branco</label>
+          <button class="btn" id="copy" type="button">Copiar quantidades</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">2</div>
+      <div class="sb">
+        <h3>PRODUÇÃO · nova linha <span id="pRow">38</span></h3>
+        <p>Copie A:G da linha <span id="pRowPrev">37</span> para a linha <span id="pRow2">38</span> (mesmo padrão). Depois clique em <b>H</b> dessa linha e cole H e I:</p>
+        <div class="kv"><span>H</span><code id="pH"></code><span>I · MÊS</span><code id="pI"></code></div>
+        <div class="actions"><button class="btn ghost" id="copyProd" type="button">Copiar H e I</button></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">3</div>
+      <div class="sb">
+        <h3>NOTAS FISCAIS · linha <span id="nfRow">59</span> (<span id="nfObraT">Rebouças</span>)</h3>
+        <p id="nfSrc">Exemplo: NFS-e 302 da medição 25. Solte a nota do mês para trocar; se for digitalizada, digite número e data.</p>
+        <div class="form">
+          <label>Obra<select id="nfObra"><option value="Rebouças">Rebouças (CO050)</option><option value="Riozinho ">Riozinho</option></select></label>
+          <label>Nº NF<input id="nfNum" inputmode="numeric"></label>
+          <label>Emissão<input id="nfEmi" placeholder="dd/mm/aaaa"></label>
+          <label>Valor da nota (E)<input id="nfVal" inputmode="decimal"></label>
+          <label>ISS retido<input id="nfIss" inputmode="decimal"></label>
+          <label>IRRF retido<input id="nfIrrf" inputmode="decimal"></label>
+          <label>Reajuste (F) ← CONTROLE DE MEDIÇÕES linha<input id="nfCtl" inputmode="numeric"></label>
+        </div>
+        <ul class="checks" id="nfChecks"></ul>
+        <div class="kv"><span>Linha</span><code id="nfPreview"></code></div>
+        <div class="actions"><button class="btn" id="copyNF" type="button">Copiar linha A:M</button><button class="btn ghost" id="copyRio" type="button">Copiar "Riozinho" p/ M<span id="rioRow">58</span></button></div>
+        <p class="note" id="nfRioNote"></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">4</div>
+      <div class="sb">
+        <h3>CONTROLE DE MEDIÇÕES · linha <span id="cmRowT">51</span> (CO050)</h3>
+        <p>Mesma linha usada no reajuste da etapa 3. Valores do relatório de medição; confira e ajuste se precisar.</p>
+        <div class="form">
+          <label>Nº medição (A)<input id="cmNum" inputmode="numeric"></label>
+          <label>Total P0 (D)<input id="cmD" inputmode="decimal"></label>
+          <label>Reajuste (H)<input id="cmH" inputmode="decimal"></label>
+          <label>Saldo P0 (M)<input id="cmM" inputmode="decimal"></label>
+          <label>Saldo reajustado (O)<input id="cmO" inputmode="decimal"></label>
+          <label>Linha anterior do CO050 (L)<input id="cmPrev" inputmode="numeric"></label>
+        </div>
+        <ul class="checks" id="cmChecks"></ul>
+        <div class="kv"><span>Linha</span><code id="cmPreview"></code></div>
+        <div class="actions"><button class="btn" id="copyCM" type="button">Copiar linha A:S</button></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">5</div>
+      <div class="sb">
+        <h3>MEDIÇÕES · linhas <span id="mdRows">112–115</span></h3>
+        <p>4 linhas por mês: Riozinho P0 e Reajuste, depois Rebouças P0 e Reajuste. Clique em A<span id="mdA">112</span> e cole o bloco (A:D).</p>
+        <div class="form">
+          <label>Riozinho na CONTROLE (linha; vazio = sem medição)<input id="mdRio" inputmode="numeric" placeholder="sem medição"></label>
+        </div>
+        <div class="tbl mini"><table><tbody id="mdTb"></tbody></table></div>
+        <div class="actions"><button class="btn" id="copyMD" type="button">Copiar bloco A:D</button></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="sn">6</div>
+      <div class="sb">
+        <h3>MEDIÇÕES CEQ · linha <span id="ceqRow">29</span> (competência <span id="ceqComp">31/07/2026</span>)</h3>
+        <p id="ceqSrc">Exemplo: CEQ 07/2026, valor líquido R$ 495.162,85 (linha 164 da planilha de equipamentos). Solte a planilha "Medição de 51501" do mês para trocar.</p>
+        <div class="form">
+          <label>Competência (mês do CEQ)<select id="ceqMes"></select></label>
+          <label>Valor líquido (C164)<input id="ceqVal" inputmode="decimal"></label>
+        </div>
+        <div class="kv"><span>Linha</span><code id="ceqPreview"></code></div>
+        <div class="actions"><button class="btn" id="copyCEQ" type="button">Copiar linha A:H</button></div>
+      </div>
+    </div>
+  </section>
+  <div class="msg" id="msg" role="status"></div>
+  <textarea id="fallback" hidden aria-label="Coluna para copiar" style="width:100%;height:120px;font:12px var(--mono);background:var(--panel);color:var(--fg);border:1px solid var(--line)"></textarea>
+
+  <div class="alert" id="alert" hidden><h3 id="alertT"></h3><ul id="alertL"></ul></div>
+
+  <div class="tablebar">
+    <h2>PLAN. CONTROLE · bloco 001 PR-990 (linhas 485–782)</h2>
+    <label class="chk"><input type="checkbox" id="onlyQ"> mostrar só serviços com quantidade</label>
+  </div>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Linha</th><th>Item</th><th>Descrição (col. F)</th><th>Un</th><th class="n">Qtde do mês</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+
+  <footer>Casamento feito por preço unitário, código e subseção (PDF) ou qtde de contrato e preço (xlsx). A conferência compara Σ quantidade × preço P0 com o total da medição no próprio arquivo; diferença de centavos é arredondamento. Os arquivos são lidos só no seu navegador.</footer>
+</div>
+
+<script>
+const BASE={"med":[["h","1","TERRAPLENAGEM"],["i","493647","Carga e transporte de material para bota fora","m3",46465.94,11.78,9],["i","400500","Colchão drenante de areia para fundação de aterros","m3",6633.83,324.85,10],["i","401950","Compactação de aterros 95% PN (B)","m3",125515.05,6.18,11],["i","401100","Compactação de aterros 100% PN (B)","m3",102477.69,7.44,13],["i","403000","Compactação de aterros em 3a. cat.","m3",18294.23,8,12],["i","400000","Desmatamento e limpeza diam. até 30cm","m2",232329.7,1.25,14],["i","400300","Destocamento árvores diam. > 30cm","un",259,54.77,15],["i","410200","Esc. carga e transp. 1a. cat. 0-200m","m3",101294.29,10.47,16],["i","410400","Esc. carga e transp. 1a. cat. 200-400m","m3",13280.16,10.76,17],["i","410800","Esc. carga e transp. 1a. cat. 600-800m","m3",4653.93,11.55,18],["i","411000","Esc. carga e transp. 1a. cat. 800-1000m","m3",1642.77,11.99,19],["i","411200","Esc. carga e transp. 1a. cat. 1000-1200m","m3",19198.55,12.38,20],["i","411400","Esc. carga e transp. 1a. cat. 1200-1400m","m3",5665.84,13.71,21],["i","411600","Esc. carga e transp. 1a. cat. 1400-1600m","m3",601.86,14.16,22],["i","412000","Esc. carga e transp. 1a. cat. 1600-2000m","m3",6926.57,14.9,23],["i","413000","Esc. carga e transp. 1a. cat. 2000-3000m","m3",17218.97,17.21,24],["i","414000","Esc. carga e transp. 1a. cat. 3000-4000m","m3",34344.1,19.27,25],["i","415000","Esc. carga e transp. 1a. cat. 4000-5000m","m3",39996.26,22.25,26],["i","416010","Esc. carga e transp. 1a. cat. 5000-6000m","m3",13777.85,25.37,27],["i","418000","Esc. carga e transp. 1a. cat. 6000-8000m","m3",3362.77,29.3,28],["i","420400","Esc. carga e transp. 2a. cat. 200-400m","m3",5535,14.84,29],["i","420800","Esc. carga e transp. 2a. cat. 600-800m","m3",267.12,15.81,30],["i","422000","Esc. carga e transp. 2a. cat. 1600-2000m","m3",8489.19,19.99,31],["i","423000","Esc. carga e transp. 2a. cat. 2000-3000m","m3",17346.27,21.84,32],["i","430410","Esc. carga e transp. 3a. cat. 200-400m","m3",2271.55,46.71,33],["i","430610","Esc. carga e transp. 3a. cat. 400-600m","m3",1412.35,48.32,34],["i","431410","Esc. carga e transp. 3a. cat. 1200-1400m","m3",435.13,50.52,35],["i","432010","Esc. carga e transp. 3a. cat. 1600-2000m","m3",763.27,53.74,36],["i","433010","Esc. carga e transp. 3a. cat. 2000-3000m","m3",1070.38,57.73,37],["i","434010","Esc. carga e transp. 3a. cat. 3000-4000m","m3",8445.73,62.3,38],["i","404300","Vou","m3",75087.01,0.87,39],["i","404000","Remoção de solos moles","m3",28621.07,20.54,42],["i","495160","Fundação de aterro com brita","m3",1326.77,164,40],["i","495161","Fundação de aterro com rachão","m3",28703.95,169.76,41],["h","2","PAVIMENTAÇÃO"],["i","530200","Bica corrida","m3",84642,180.59,44],["i","531100","Brita graduada 100% Pm","m3",25878.66,241.97,45],["i","570400","C.B.U.Q. excl. fornec. do CAP (acima de 10.000 t)","t",18747.81,263.04,46],["i","575000","Contenção lateral com solo local","m3",2514.01,44.25,47],["i","591490","Corte de pavimento asfáltico / concreto c/serra disco","m",17,9.59,48],["i","512050","Demolição mecânica de pavimento","m3",689,57.28,49],["i","505100","Fresagem descontínua a frio","m3",172.5,341.15,50],["i","560100","Imprimação impermeab. exclusive fornec. da emulsão","m2",161756,0.79,51],["i","561100","Pintura de ligação exclusive fornec. da emulsão","m2",161734,0.46,52],["i","516300","Preenchimento rebaixo c/ aprov. corte 3a. cat.","m3",3079.1,26.84,53],["i","511200","Regularização compac.subleito 100% PN (B)","m2",171057,5.16,54],["h","3","LIGANTES BETUMINOSOS"],["i","589000","Fornecimento de CAP-50/70","t",1068.62,5547.75,56],["i","589190","Fornecimento de emulsão asfáltica EAI p/ imprimação","t",194.1,5716.46,57],["i","589420","Fornecimento de emulsão asfáltica RR-1C","t",80.86,4476.94,58],["h","4","DRENAGEM E OBRAS ARTE CORRENTES"],["i","603600","Alvenaria pedra de mão argamassada","m3",137,456.92,60],["i","601100","Apiloamento manual","m3",13601,60.31,61],["i","620900","Boca de BDTC 1,50m","un",2,8161.87,62],["i","620100","Boca de BSTC 0,60m","un",2,1268.62,63],["i","620200","Boca de BSTC 0,80m","un",12,1770.39,64],["i","620300","Boca de BSTC 1,00m","un",17,2543.29,65],["i","620400","Boca de BSTC 1,20m","un",7,3289.4,66],["i","620500","Boca de BSTC 1,50m","un",4,6019.67,67],["i","621300","Boca de BTTC 1,50m","un",1,10307.89,68],["i","622100","Boca de saída dreno profundo - tipo 2","un",58,384.51,69],["i","622200","Boca de saída dreno sub-superficial","un",12,211.89,70],["i","612000","Corpo de BDTC 1,50m com berço","m",25,5569.35,71],["i","610500","Corpo de BSTC 0,40m com berço","m",435,270.12,72],["i","610700","Corpo de BSTC 0,60m com berço","m",223,537.86,73],["i","610900","Corpo de BSTC 0,80m com berço","m",300,890.42,74],["i","611100","Corpo de BSTC 1,00m com berço","m",334,1487.9,75],["i","611300","Corpo de BSTC 1,20m com berço","m",228,1819,76],["i","611500","Corpo de BSTC 1,50m com berço","m",37,2831.3,77],["i","612400","Corpo de BTTC 1,50m com berço","m",19,8396.93,78],["i","606600","Demolição de concreto armado","m3",12.08,343.82,79],["i","606700","Demolição de concreto simples","m3",5.95,164.4,80],["i","692450","Dreno de Talvegue","m",1076,367.71,81],["i","643100","Dreno profundo em rocha - tipo 2(GNT)","m",2870,111.66,82],["i","641800","Dreno profundo em solo - tipo 6A(GNT)","m",10410,251.83,83],["i","644200","Dreno sub-superficial - tipo 2","m",1594,25.59,84],["i","800000","Enleivamento","m2",3412,13.61,85],["i","600300","Escavação de bueiros em 1a. cat.","m3",11700,12.84,86],["i","600500","Escavação de bueiros em 3a. cat.","m3",220.6,136.1,87],["i","600600","Escavação valas de drenagem 1a. cat.","m3",3919,20.76,88],["i","602200","Escoramento de cavas de fundação","m2",1808,122.5,89],["i","791195","Fornecimento e colocação de meia cana de concreto 0,30m","m",125,71.2,90],["i","860200","Gabião tipo caixa 2x1x0,50m ZN/AL + PVC (NBR 8964)","m3",11,1017.57,91],["i","603900","Lastro de brita","m3",385,195.31,92],["i","810200","Meio fio de concreto tipo 2 (executado c/ extrusora)","m",1860.5,44.4,93],["i","810700","Meio fio de concreto tipo 7 (executado c/ extrusora)","m",130,35.68,94],["i","601200","Reaterro e apiloamento mecânico","m3",1425,38.19,95],["i","630400","Remoção de bueiro 0,40m","m",343,22.17,96],["i","630600","Remoção de bueiro 0,60m","m",453,26.6,97],["i","630800","Remoção de bueiro 0,80m","m",30,53.21,98],["i","631000","Remoção de bueiro 1,00m","m",51,53.06,99],["i","653400","Sarjeta trapezoidal concreto - tipo 3","m",109,123.16,100],["i","653600","Sarjeta trapezoidal concreto - tipo 4","m",74,89.82,101],["i","650000","Sarjeta triangular concreto - tipo 1","m",11825,176.99,102],["i","655500","Transp.segmento sarjeta tipo- 5 (ST-1/SZ-2) c/ placas","m",381,726.9,103],["i","660100","Valeta concreto proteção aterro - tipo 5A","m",403,191,104],["i","660300","Valeta concreto proteção aterro - tipo 6A","m",703,254,105],["i","660500","Valeta concreto proteção aterro - tipo 7A","m",3385,151.59,106],["i","661100","Valeta concreto proteção corte - tipo 5A","m",366,228.74,107],["i","661300","Valeta concreto proteção corte - tipo 6A","m",216,311.55,108],["i","661500","Valeta concreto proteção corte - tipo 7A","m",4927,185.04,109],["h","4.01","Dispositivos"],["i","603000","Aço CA-50 fornec. dobr. colocação","kg",1999.81,18.67,111],["i","603300","Aço CA-60 fornec. dobr. colocação","kg",8435.5,20.08,112],["i","603600","Alvenaria pedra de mão argamassada","m3",226.82,456.92,113],["i","601100","Apiloamento manual","m3",211.15,60.31,114],["i","605300","Concreto Fck = 15 mPa, preparo em betoneira e lanç.","m3",920.67,760.45,115],["i","605500","Concreto Fck = 20 mPa, preparo em betoneira e lanç.","m3",48.01,793.16,116],["i","605000","Concreto magro, preparo em betoneira e lanç.","m3",12.57,675.02,117],["i","800000","Enleivamento","m2",3207,13.61,118],["i","600600","Escavação valas de drenagem 1a. cat.","m3",20153.71,20.76,119],["i","600800","Escavação valas de drenagem 3a. cat.","m3",462.72,175.43,120],["i","602000","Formas de madeira comum","m2",3752.7,68.59,121],["i","691104","Fornec. e colocação tampão ferro fundido Ø=0,60m , Classe 400, p/poço de visita","un",36,544.96,122],["i","696420","Fornecimento e colocação de tubo PEAD para dreno Ø=100mm","m",1539,12.58,123],["i","607000","Fornecimento e colocação geotextil n/tecido(GNT)","m2",3186.3,10.13,124],["i","690051","Fornecimento e transporte de brita para dreno","m3",237.12,247.24,125],["i","860200","Gabião tipo caixa 2x1x0,50m ZN/AL + PVC (NBR 8964)","m3",360.5,1017.57,126],["i","860150","Gabião tipo caixa 2x1x1,00m ZN/AL + PVC (NBR 8964)","m3",902,823.68,127],["i","860023","Gabião tipo colchão ZN/AL + PVC e=0,23m (NBR 8964)","m2",6854,296.51,128],["h","5","OBRAS DE ARTE ESPECIAIS - SOLO GRAMPEADO"],["i","791117","Bate choco e limpeza de talude com bota fora de pedras soltas","m2",3099,73.18,130],["i","794433","Dreno de PVC reforçado 0,30m a 0,55m Ø=75mm - barbacã","un",179,43.19,131],["i","792400","Fornecimento e aplicação de concreto projetado via seca Fck = 20 mPa, volume passado na máquina","m3",201.44,2549.55,132],["i","792600","Fornecimento e colocação de Tela Telcon Q-138 ou equivalente, para OAE","kg",2409.47,19.53,133],["i","795482","Fornecimento, perfuração, instalação e protensão de tirante INCO 22 D em rocha, inclusive injeção de nata de cimento, acessórios e proteção das cabeças dos tirantes, ou equivalente","m",1162.13,669.97,134],["h","6","OBRAS DE ARTE ESPECIAIS - PONTE"],["h","6.01","Infraestrutura e Mesoestrutura"],["i","730000","Aço CA-50 fornec. dobr. colocação","kg",22922,18.52,137],["i","722500","Argamassa fluída para estaca raiz (volume efetivamente aplicado)","m3",39.8,1138.17,138],["i","795890","Bombeamento de concreto","m3",130.4,42.33,139],["i","792320","Concreto usinado Fck = 25 mPa, exclusive bombeamento","m3",116.44,537.79,140],["i","792350","Concreto usinado Fck = 15 mPa, exclusive bombeamento","m3",13.96,503.57,141],["i","790305","Execução de estaca raiz em rocha ø=305mm, exclusive materiais","m",120,1164.36,142],["i","793410","Execução de estaca raiz em solo ø=410mm, exclusive materiais","m",168,633.06,143],["i","711000","Formas de madeira compensada resinada","m2",364.69,88.88,144],["i","797881","Fornecimento e colocação de junta de dilatação em elastômero e perfil VV - L=50mm e H=80mm","m",23.6,817.87,145],["h","6.02","Superestrutura"],["i","730000","Aço CA-50 fornec. dobr. colocação","kg",37883,18.52,147],["i","756000","Apoio elastomérico fretado fornec.colocação","kg",221.18,97.45,148],["i","795890","Bombeamento de concreto","m3",156,42.33,149],["i","795528","Carga, transporte e posicionamento de pré-lajes pré-moldadas, P=280 kg","un",52,91.21,150],["i","794545","Carga, transporte e posicionamento de pré-lajes pré-moldadas, P=450 kg","un",104,265.38,151],["i","794571","Carga, transporte, lançamento e posicionamento no vão de vigas pré-moldadas, P=71, 0tf, L=35,90m","un",4,54233.55,152],["i","792350","Concreto usinado Fck = 15 mPa, exclusive bombeamento","m3",16.75,503.57,153],["i","793210","Concreto usinado Fck = 40 mPa, exclusive bombeamento","m3",227.6,600.78,154],["i","754400","Dreno ferro galvanizado 0,40m 4\"","un",18,87.21,155],["i","711000","Formas de madeira compensada resinada","m2",1245.63,88.88,156],["i","793270","Fornec. e colocação de treliça metálica TG-16 ou equivalente","kg",1302.08,12.82,157],["i","795980","Fornecimento, colocação e protensão de ancoragem ativa p/ 7 ø 15,2mm","un",8,432.63,158],["i","796414","Fornecimento, colocação e protensão de ancoragem passiva p/ 13 ø 15,2mm","un",4,319.59,159],["i","796971","Fornecimento, colocação e protensão de ancoragem passiva p/ 14 ø 15,2mm","un",4,324.24,160],["i","796310","Fornecimento, corte e colocação de aço CP 190 RB Ø=15,2mm, inclusive protensão","kg",9727.92,14.92,161],["i","796970","Fornecimento e colocação de ancoragens ativas 14 ø 15,2mm","un",12,950.59,162],["i","796470","Fornecimento e colocação de bainha metálica galvanizada semi-rígida ø=65mm, inclusive injeção de nata de cimento","m",38,74.23,163],["i","796200","Fornecimento e colocação de bainha semi-rígida metálica galvanizada øint=90mm, inclusive injeção com nata de cimento","m",549.32,21.85,164],["i","796913","Fornecimento, instalação e protensão de ancoragem ativa 13 ø 15,20mm","un",12,931.05,165],["h","7","CONTENÇÕES"],["i","896160","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equivalente) 1,00x1,00x4,00m ou equivalente, inclusive enchimento com rachão","un",102,1844.25,167],["i","896145","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equivalente) 1,00x1,00x5,00m ou equivalente, inclusive enchimento com rachão","un",36,1960.95,168],["i","896150","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equivalente) 0,50x1,00x4,00m ou equivalente, inclusive enchimento com rachão","un",181,1284.24,169],["i","896135","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equivalente) 0,50x1,00x5,00 ou equivalente, inclusive enchimento com rachão","un",57,1382.17,170],["i","607000","Fornecimento e colocação geotextil n/tecido(GNT)","m2",1380,10.13,171],["i","860200","Gabião tipo caixa 2x1x0,50m ZN/AL + PVC (NBR 8964)","m3",20.5,1017.57,172],["i","860150","Gabião tipo caixa 2x1x1,00m ZN/AL + PVC (NBR 8964)","m3",101,823.68,173],["h","8","GALERIAS CELULARES"],["i","730000","Aço CA-50 fornec. dobr. colocação","kg",60146.11,18.52,175],["i","792140","Concreto usinado Fck = 20 mPa, exclusive bombeamento","m3",937.43,518.43,179],["i","745000","Argamassa cimento e areia 1:3","m3",47.93,843.46,176],["i","795890","Bombeamento de concreto","m3",1112.07,42.33,177],["i","792340","Concreto magro usinado, exclusive bombeamento","m3",174.64,483.46,178],["i","712100","Escoramento cavas de fundação","m2",1123.6,122.5,180],["i","711000","Formas de madeira compensada resinada","m2",4647.23,88.88,181],["h","9","PASSA FAUNA"],["i","896340","Fornecimento e colocação de Cerca de tela arame galvanizado para passa fauna h=2,00m, inclusive reforço, mourões de concreto","m",680,249.91,183],["h","09.01","Corpo de BSCC 2,00 x 2,00 H=0,00 a 1,00m 36m"],["i","730000","Aço CA-50 fornec. dobr. colocação","kg",4298.58,18.52,185],["i","745000","Argamassa cimento e areia 1:3","m3",3.6,843.46,186],["i","741500","Concreto Fck = 15 mPa, preparo em betoneira e lanç.","m3",9.36,760.45,187],["i","742000","Concreto Fck = 20 mPa, preparo em betoneira e lanç.","m3",47.16,793.16,188],["i","711000","Formas de madeira compensada resinada","m2",381.6,88.88,189],["h","09.02","Boca de BSCC 2,00 x 2,00 2m"],["i","30000","Aço CA-50 fornec. dobr. colocação","kg",2550,18.52,191],["i","601100","Apiloamento manual","m3",487.8,60.31,192],["i","745000","Argamassa cimento e areia 1:3","m3",1.74,843.46,193],["i","741500","Concreto Fck = 15 mPa, preparo em betoneira e lanç.","m3",12.6,760.45,194],["i","742000","Concreto Fck = 20 mPa, preparo em betoneira e lanç.","m3",35.72,793.16,195],["i","600300","Escavação de bueiros em 1a. cat.","m3",381.6,12.84,196],["i","711000","Formas de madeira compensada resinada","m2",226,88.88,197],["i","743900","Lastro de brita","m3",8.28,195.31,198],["h","10","SERVIÇOS COMPLEMENTARES"],["i","850000","Abrigo em parada de ônibus","un",17,8899.71,200],["i","893550","Barreira de siltagem","m",5463.5,29.56,201],["i","831000","Cerca 4 fios c/ mourões de concreto","m",15906.82,43.11,202],["i","606700","Demolição de concreto simples","m3",4,164.4,203],["i","890022","Relocação de portão","un",4,678.11,204],["i","890400","Remoção de abrigo de ônibus","un",3,98.6,205],["i","841000","Remoção de cercas","m",6304.5,13.95,206],["h","10.01","Passeio"],["i","603000","Aço CA-50 fornec. dobr. colocação","kg",839.12,18.67,208],["i","603300","Aço CA-60 fornec. dobr. colocação","kg",1122,20.08,209],["i","531100","Brita graduada 100% Pm","m3",491.7,241.97,210],["i","605500","Concreto Fck = 20 mPa, preparo em betoneira e lanç.","m3",13.6,793.16,211],["i","600000","Escavação manual de vala 1a. cat.","m3",16.81,55.27,212],["i","602000","Formas de madeira comum","m2",214.2,68.59,213],["i","834907","Fornecimento e assentamento de piso tátil de concreto alerta/direcional 40x40cm vermelho","m2",13.28,118.67,214],["i","892105","Fornecimento e colocação de gradil metálico c/ jateamento e pintura a base de epóxi c/preparo de fundo e disp. de fixação","m",340,638.51,215],["i","534916","Pavimento c/ bloco intertravado concreto (Pavercor natural) e=6cm, incl. colchão pó de pedra","m2",4391,96.75,216],["i","534918","Pavimento c/ bloco intertravado concreto (Pavercor natural) e=8cm, incl. colchão pó de pedra","m2",581,108.83,217],["i","511200","Regularização compac.subleito 100% PN (B)","m2",5180,5.16,218],["h","10.02","Rampas"],["i","604000","Argamassa cimento e areia 1:3","m3",0.07,843.46,220],["i","605500","Concreto Fck = 20 mPa, preparo em betoneira e lanç.","m3",3.03,793.16,221],["i","602000","Formas de madeira comum","m2",2.86,68.59,222],["i","834907","Fornecimento e assentamento de piso tátil de concreto alerta/direcional 40x40cm vermelho","m2",15.68,118.67,223],["i","504920","Fornecimento e colocação de Tela Telcon Q-138 ou equivalente","kg",25.12,10.37,224],["i","603900","Lastro de brita","m3",1.22,195.31,225],["h","10.03","Travessias elevadas"],["i","834907","Fornecimento e assentamento de piso tátil de concreto alerta/direcional 40x40cm vermelho","m2",10,118.67,227],["h","10.04","Paisagismo"],["i","800000","Enleivamento","m2",128450,13.61,229],["i","790558","Fornecimento e colocação de geomanta ecológica","m2",13449,18.27,230],["i","800100","Hidrossemeadura","m2",47522,10.72,231],["h","11","SINALIZAÇÃO"],["i","823000","Defensa simples semi-maleável c/ espaçador e calço","m",5039,541.03,233],["i","822100","Faixa de sinalização horizontal c/tinta resina acrílica base água","m2",5332.68,26.85,234],["i","801926","Fornecimento e colocação de dispositivo refletivo para barreira New Jersey","un",4,33.99,235],["i","801925","Fornecimento e colocação de dispositivo refletivo para defensa metálica","un",322,22.4,236],["i","807080","Fornecimento e instalação de terminal absorvedor de energia p/ velocidade de 80 km/h de acordo com ABNT NBR-15486-2016","un",83,9929.17,237],["i","806080","Fornecimento e instalação de terminal amortecedor de impacto p/ velocidade de 80 km/h de acordo com ABNT NBR-15486-2016","un",2,68325.12,238],["i","822330","Pintura de setas e zebrados - termoplástico por extrusão - e=3mm","m2",376.12,81.62,239],["i","820000","Placa sinalização c/ película refletiva","m2",161.58,647.87,240],["i","871500","Pórtico simples 11,00 a 15,00m p/placa até 24m2( exclusive placa)","un",1,91807.55,241],["i","897310","Remoção de placa de sinalização","m2",5,87.55,242],["i","890770","Remoção de pórtico c/ transporte","un",2.68,1784.98,243],["i","878300","Semi-pórtico simples 8,30m p/placa até 12m2( exclusive placa)","un",2,50878.52,244],["i","822010","Suporte metálico galv. fogo perfil \"C\" 110x70x25x2, 00mm, h=3,00m","un",45,572.5624,245],["i","821110","Suporte metálico galv. fogo perfil \"C\" 110x70x25x2, 00mm, h=3,50m","un",103,635.83,246],["i","821020","Suporte metálico galv. fogo perfil \"C\" 150x85x25x2, 70mm, h=4,00m","un",11,1039.81,247],["i","822020","Suporte metálico galv. fogo perfil \"C\" 150x85x25x3, 40mm, h=4,50m","un",2,1389.19,248],["i","871000","Tacha refletiva bidirecional","un",1008,20.23,249],["i","870000","Tacha refletiva monodirecional","un",3036,19.52,250],["i","873000","Tachão refletivo bidirecional","un",1019,34.7,251],["h","12","SINALIZAÇÃO PROVISÓRIA"],["i","801943","Bandeirinha","h",4320,35.09,253],["i","801947","Barreira contínua classe I","m",120,90.84,254],["i","801963","Bastão vermelho sinalizador","un",20,19.76,255],["i","801964","Boneco sinalizador de obra","un",8,116.37,256],["i","801940","Cone sinalizador tipo conão/bolo de noiva h=1,10m, base 50x50cm para sinalização provisória","un",456,49.11,257],["i","822200","Faixa de sinalização horizontal provisória","m2",1800,21.39,258],["i","801961","Luz intermitente (piscante)","un",30,52.02,259],["i","802160","Placa de sinalização provisória","m2",162.1,97.16,260],["i","802161","Suporte de madeira 3\" x 3\" para sinalização provisória","un",8,18.71,261],["h","13","MELHORIAS AMBIENTAIS"],["i","897890","Elaboração e implantação de programa de atendimento à emergências e plano de contingência","mês",18,7203.94,263],["i","897893","Elaboração e implantação do programa de comunicação social","mês",12,7248.18,264],["i","897888","Programa de diagnóstico e monitoramento de atropelamento de fauna","mês",6,8647.03,267],["i","897883","monitoramento da qualidade das águas superficiais - 3 rios","mês",6,11776.27,265],["i","897896","monitoramento de ruídos","mês",18,10715.7,266],["i","897998","Programa de monitoramento dos Poluentes Atmosféricos","mês",18,3688.87,269],["i","897879","Programa de monitoramento arqueológico","mês",8,35062.5248888,268],["h","14","ILUMINAÇÃO"],["i","862","Cabo elétrico cobre nú 16mm²","m",70,26.434894361055683,271],["i","1022","Cabo elétrico flexível PVC 0,6/1kv - 2,5mm²","m",1224.6,5.174705453183158,272],["i","COT-101","Cabo Flexível 1kV Alumínio Triplex - 16mm²","m",826,12.819392786674106,273],["i","COT-102","Caixa de passagem 30 x 30 x 30cm com tampa","pç",30,125.76477541194136,274],["i","COT-103","Caixa de passagem 60 x 60 x 60 cm com tampa em ferro fundido padrão COPEL","pç",2,1111.0514654291267,275],["i","11854","Conector de derivação","pç",2,9.012359737765316,276],["i","11821","Conector split bolt bimetálico até 25mm²","pç",81,8.879674939814072,277],["i","21130","Eletroduto aço galvanizado 40mm","br",2,31.425884068606347,278],["i","2446","Eletroduto corrugado 50mm PEAD","m",877,10.369827286035742,279],["i","406","Fita aço inox 19,5mm","rl",1,105.5456535087555,280],["i","404","Fita isolante autofusão","m",6,2.1944024276552017,281],["i","20111","Fita isolante pvc 750v","rl",13,16.126306212535898,282],["i","425","Grampo de aterramento","pç",35,7.430348685269705,283],["i","11991","Haste de aterramento","pç",35,132.786863180438,284],["i","42247","Luminária led 153w","un",21,1140.5585231889,285],["i","42248","Luminária led 233w","un",11,2064.861238763109,286],["i","COT-104","Poste conico curvo de 12,0m de altura útil em aço galvanizado a fogo, engastado","un",25,4919.625699298736,287],["i","COT-105","Poste conico reto de 12,0m de altura útil em aço galvanizado a fogo, engastado","un",1,4052.530544687352,288],["i","2510","Relé fotoelétrico","pç",32,43.020494104961266,289],["i","COT-106","Suporte triplo para luminária aço galvanizado","pç",1,185.7485106088233,290],["i","US-003","ABERTURA DE VALETA PARA REDE SUBTERRÂNEA, POR m3","us",581.34,94.10412727067782,291],["h","15","INTERFERÊNCIAS"],["h","303","COPEL"],["i","304","Execução de obra no sistema de distribuição de energia elétrica - COPEL","VB",1,242314.51,294],["h","305","SANEPAR"],["i","306","Remanejamento do abastecimento SANEPAR perímetro urbano","VB",1,60465.24,296],["h","307","REMANEJAMENTO DA REDE PÚBLICA DE SANEMANETO E ESGOTO"],["i","308","Assentamento de tubulação de PVC JE / JEI para água DN 75","m",1150,4.25,298],["i","309","Enleivamento","m2",5750,13.61,299],["i","310","Escavação valas de drenagem 1a. cat.","m3",6900,20.76,300],["i","311","Lastro de brita","m3",172.5,195.31,301],["i","312","Reaterro e apiloamento mecânico","m3",6900,38.19,302],["h","99","MOBILIZAÇÃO e DESMOBILIZAÇÃO"],["i","999999","Mobilização e desmobilização","un",1,1273947.04,304]],"dro":[[7,"001","002/2024-DER/PR - PR-990 Implantação - Rebouças/PR","",0],[8,"001.01","01 - TERRAPLENAGEM","",0],[9,"001.01.01","Carga e transporte de material para bota fora (Mat de limpeza - DMT 6 Km)","M3",1],[10,"001.01.02","Colchão drenante de areia para fundação de aterros","M3",1],[11,"001.01.03","Compactação de aterros  95% PN (B)","M3",1],[12,"001.01.04","Compactação de aterros em 3a. cat.","M3",1],[13,"001.01.05","Compactação de aterros 100% PN (B)","M3",1],[14,"001.01.06","Desmatamento e limpeza diam. até 30cm","M2",1],[15,"001.01.07","Destocamento árvores diam. > 30cm","UN",1],[16,"001.01.08","Esc. carga e transp. 1a. cat.     0-200m","M3",1],[17,"001.01.09","Esc. carga e transp. 1a. cat.   200-400m","M3",1],[18,"001.01.10","Esc. carga e transp. 1a. cat.   600-800m","M3",1],[19,"001.01.11","Esc. carga e transp. 1a. cat.   800-1000m","M3",1],[20,"001.01.12","Esc. carga e transp. 1a. cat.  1000-1200m","M3",1],[21,"001.01.13","Esc. carga e transp. 1a. cat.  1200-1400m","M3",1],[22,"001.01.14","Esc. carga e transp. 1a. cat.  1400-1600m","M3",1],[23,"001.01.15","Esc. carga e transp. 1a. cat.  1600-2000m","M3",1],[24,"001.01.16","Esc. carga e transp. 1a. cat.  2000-3000m","M3",1],[25,"001.01.17","Esc. carga e transp. 1a. cat.  3000-4000m","M3",1],[26,"001.01.18","Esc. carga e transp. 1a. cat.  4000-5000m","M3",1],[27,"001.01.19","Esc. carga e transp. 1a. cat.  5000-6000m","M3",1],[28,"001.01.20","Esc. carga e transp. 1a. cat.  6000-8000m","M3",1],[29,"001.01.21","Esc. carga e transp. 2a. cat.   200-400m","M3",1],[30,"001.01.22","Esc. carga e transp. 2a. cat.   600-800m","M3",1],[31,"001.01.23","Esc. carga e transp. 2a. cat.  1600-2000m","M3",1],[32,"001.01.24","Esc. carga e transp. 2a. cat.  2000-3000m","M3",1],[33,"001.01.25","Esc. carga e transp. 3a. cat.  200-400m","M3",1],[34,"001.01.26","Esc. carga e transp. 3a. cat.  400-600m","M3",1],[35,"001.01.27","Esc. carga e transp. 3a. cat. 1200-1400m","M3",1],[36,"001.01.28","Esc. carga e transp. 3a. cat. 1600-2000m","M3",1],[37,"001.01.29","Esc. carga e transp. 3a. cat. 2000-3000m","M3",1],[38,"001.01.30","Esc. carga e transp. 3a. cat. 3000-4000m","M3",1],[39,"001.01.31","Espalhamento e conformação de bota-fora","M3",1],[40,"001.01.32","Fundação de aterro com brita","M3",1],[41,"001.01.33","Fundação de aterro com rachão","M3",1],[42,"001.01.34","Remoção de solos moles  2000-3000 m","M3",1],[43,"001.02","02 - PAVIMENTAÇÃO","",0],[44,"001.02.01","Bica corrida","M3",1],[45,"001.02.02","Brita graduada 100% PM","M3",1],[46,"001.02.03","C.B.U.Q. excl. fornec. do CAP (acima de 10.000 t)","T",1],[47,"001.02.04","Contenção lateral com solo local","M3",1],[48,"001.02.05","Corte de pavimento asfáltico / concreto c/serra disco","M",1],[49,"001.02.06","Demolição mecânica de pavimento","M3",1],[50,"001.02.07","Fresagem descontínua a frio","M3",1],[51,"001.02.08","Imprimação impermeab. exclusive fornec. da emulsão","M2",1],[52,"001.02.09","Pintura de ligação exclusive fornec. da emulsão","M2",1],[53,"001.02.10","Preenchimento rebaixo c/ aprov. corte 3a. cat.","M3",1],[54,"001.02.11","Regularização compac.subleito 100% PN (B)","M2",1],[55,"001.03","03 - LIGANTES BETUMINOSOS","",0],[56,"001.03.01","Fornecimento de CAP-50/70","T",1],[57,"001.03.02","Fornecimento de emulsão asfáltica EAI p/imprimação","T",1],[58,"001.03.03","Fornecimento de emulsão asfáltica RR-1C","T",1],[59,"001.04","04 - DRENAGEM E OBRAS ARTE CORRENTES","",0],[60,"001.04.01","Alvenaria pedra de mão argamassada","M3",1],[61,"001.04.02","Apiloamento manual","M3",1],[62,"001.04.03","Boca de BDTC 1,50m","UN",1],[63,"001.04.04","Boca de BSTC 0,60m","UN",1],[64,"001.04.05","Boca de BSTC 0,80m","UN",1],[65,"001.04.06","Boca de BSTC 1,00m","UN",1],[66,"001.04.07","Boca de BSTC 1,20m","UN",1],[67,"001.04.08","Boca de BSTC 1,50m","UN",1],[68,"001.04.09","Boca de BTTC 1,50m","UN",1],[69,"001.04.10","Boca de saída dreno profundo - tipo 2","UN",1],[70,"001.04.11","Boca de saída dreno sub-superficial","UN",1],[71,"001.04.12","Corpo de BDTC 1,50m com berço","M",1],[72,"001.04.13","Corpo de BSTC 0,40m com berço","M",1],[73,"001.04.14","Corpo de BSTC 0,60m com berço","M",1],[74,"001.04.15","Corpo de BSTC 0,80m com berço","M",1],[75,"001.04.16","Corpo de BSTC 1,00m com berço","M",1],[76,"001.04.17","Corpo de BSTC 1,20m com berço","M",1],[77,"001.04.18","Corpo de BSTC 1,50m com berço","M",1],[78,"001.04.19","Corpo de BTTC 1,50m com berço","M",1],[79,"001.04.20","Demolição de concreto armado","M3",1],[80,"001.04.21","Demolição de concreto simples","M3",1],[81,"001.04.22","Dreno de Talvegue","M",1],[82,"001.04.23","Dreno profundo em rocha - tipo 2(GNT)","M",1],[83,"001.04.24","Dreno profundo em solo - tipo 6A(GNT)","M",1],[84,"001.04.25","Dreno sub-superficial - tipo 2","M",1],[85,"001.04.26","Enleivamento","M2",1],[86,"001.04.27","Escavação de bueiros em 1a. cat.","M3",1],[87,"001.04.28","Escavação de bueiros em 3a. cat.","M3",1],[88,"001.04.29","Escavação valas de drenagem 1a. cat.","M3",1],[89,"001.04.30","Escoramento de cavas de fundação","M2",1],[90,"001.04.31","Fornecimento e colocação de meia cana de concreto 0,30m","M",1],[91,"001.04.32","Gabião tipo caixa 2x1x0,50m ZN/AL + PVC  (NBR 8964)","M3",1],[92,"001.04.33","Lastro de brita","M3",1],[93,"001.04.34","Meio fio de concreto tipo 2 (executado c/ extrusora)","M",1],[94,"001.04.35","Meio fio de concreto tipo 7 (executado c/ extrusora)","M",1],[95,"001.04.36","Reaterro e apiloamento mecânico","M3",1],[96,"001.04.37","Remoção de bueiro 0,40m","M",1],[97,"001.04.38","Remoção de bueiro 0,60m","M",1],[98,"001.04.39","Remoção de bueiro 0,80m","M",1],[99,"001.04.40","Remoção de bueiro 1,00m","M",1],[100,"001.04.41","Sarjeta trapezoidal concreto - tipo  3","M",1],[101,"001.04.42","Sarjeta trapezoidal concreto - tipo  4","M",1],[102,"001.04.43","Sarjeta triangular concreto - tipo  1","M",1],[103,"001.04.44","Transp.segmento sarjeta tipo- 5 (ST-1/SZ-2) c/placas","M",1],[104,"001.04.45","Valeta concreto proteção aterro - tipo 5A","M",1],[105,"001.04.46","Valeta concreto proteção aterro - tipo 6A","M",1],[106,"001.04.47","Valeta concreto proteção aterro - tipo 7A","M",1],[107,"001.04.48","Valeta concreto proteção corte - tipo 5A","M",1],[108,"001.04.49","Valeta concreto proteção corte - tipo 6A","M",1],[109,"001.04.50","Valeta concreto proteção corte - tipo 7A","M",1],[110,"001.04.51","04.01 - Dispositivos","",0],[111,"001.04.51.01","Aço CA-50 fornec. dobr. colocação","KG",1],[112,"001.04.51.02","Aço CA-60 fornec. dobr. colocação","KG",1],[113,"001.04.51.03","Alvenaria pedra de mão argamassada","M3",1],[114,"001.04.51.04","Apiloamento manual","M3",1],[115,"001.04.51.05","Concreto Fck = 15 MPa, preparo em betoneira e lanç.","M3",1],[116,"001.04.51.06","Concreto usinado  Fck = 20 MPa, exclusive bombeamento","M3",1],[117,"001.04.51.07","Concreto magro, preparo em betoneira e lanç.","M3",1],[118,"001.04.51.08","Enleivamento","M2",1],[119,"001.04.51.09","Escavação valas de drenagem 1a. cat.","M3",1],[120,"001.04.51.10","Escavação valas de drenagem 3a. cat.","M3",1],[121,"001.04.51.11","Formas de madeira comum","M2",1],[122,"001.04.51.12","Fornec. e colocação tampão ferro fundido Ø=0,60m, Classe 400, p/poço de visita","UN",1],[123,"001.04.51.13","Fornecimento e colocação de tubo PEAD para dreno Ø=100mm","M",1],[124,"001.04.51.14","Fornecimento e colocação geotextil n/tecido(GNT)","M2",1],[125,"001.04.51.15","Fornecimento e transporte de brita  para dreno","M3",1],[126,"001.04.51.16","Gabião tipo caixa 2x1x0,50m ZN/AL + PVC  (NBR 8964)","M3",1],[127,"001.04.51.17","Gabião tipo caixa 2x1x1,00m ZN/AL + PVC (NBR 8964)","M3",1],[128,"001.04.51.18","Gabião tipo colchão ZN/AL + PVC e=0,23m (NBR 8964)","M2",1],[129,"001.05","05 - OBRAS DE ARTE ESPECIAIS - SOLO GRAMPEADO","",0],[130,"001.05.01","Bate choco e limpeza de talude com bota fora de pedras soltas","M2",1],[131,"001.05.02","Dreno de PVC reforçado 0,30m a 0,55m Ø=75mm - barbacã","UN",1],[132,"001.05.03","Fornecimento e aplicação de concreto projetado via seca Fck = 20 MPa, volume passado na má","M3",1],[133,"001.05.04","Fornecimento e colocação de Tela Telcon Q-138 ou equivalente, para OAE","KG",1],[134,"001.05.05","Fornecimento, perfuração, instalação e protensão de tirante INCO 22 D em rocha, inclusive","M",1],[135,"001.06","06 - OBRAS DE ARTE ESPECIAIS - PONTE","",0],[136,"001.06.01","06.01 - Infraestrutura e Mesoestrutura","",0],[137,"001.06.01.01","Aço CA-50 fornec. dobr. colocação","KG",1],[138,"001.06.01.02","Argamassa fluída para estaca raiz (volume efetivamente aplicado)","M3",1],[139,"001.06.01.03","Bombeamento de concreto","M3",1],[140,"001.06.01.04","Concreto usinado Fck =  25 MPa, exclusive bombeamento","M3",1],[141,"001.06.01.05","Concreto usinado Fck = 15 MPa, exclusive bombeamento","M3",1],[142,"001.06.01.06","Execução de estaca raiz em rocha ø=305mm, exclusive materiais","M",1],[143,"001.06.01.07","Execução de estaca raiz em solo ø=410mm, exclusive materiais","M",1],[144,"001.06.01.08","Formas de madeira compensada resinada","M2",1],[145,"001.06.01.09","Fornecimento e colocação de junta de dilatação em elastômero e perfil VV - L=50mm e H=80mm","M",1],[146,"001.06.02","06.02 - Superestrutura","",0],[147,"001.06.02.01","Aço CA-50 fornec. dobr. colocação","KG",1],[148,"001.06.02.02","Apoio elastomérico fretado fornec.colocação","KG",1],[149,"001.06.02.03","Bombeamento de concreto","M3",1],[150,"001.06.02.04","Carga, transporte e posicionamento de pré-lajes pré-moldadas, P=280 kg","UN",1],[151,"001.06.02.05","Carga, transporte e posicionamento de pré-lajes pré-moldadas, P=450 kg","UN",1],[152,"001.06.02.06","Carga, transporte, lançamento e posicionamento no vão de vigas pré-moldadas, P=71, 0tf, L=","UN",1],[153,"001.06.02.07","Concreto usinado Fck = 15 MPa, exclusive bombeamento","M3",1],[154,"001.06.02.08","Concreto usinado Fck = 40 MPa, exclusive bombeamento","M3",1],[155,"001.06.02.09","Dreno ferro galvanizado 0,40m 4\"","UN",1],[156,"001.06.02.10","Formas de madeira compensada resinada","M2",1],[157,"001.06.02.11","Fornec. e colocação de treliça metálica TG-16 ou equivalente","KG",1],[158,"001.06.02.12","Fornecimento, colocação e protensão de ancoragem ativa p/  7 ø 15,2mm","UN",1],[159,"001.06.02.13","Fornecimento, colocação e protensão de ancoragem passiva p/ 13 ø 15,2mm","UN",1],[160,"001.06.02.14","Fornecimento, colocação e protensão de ancoragem passiva p/ 14 ø 15,2mm","UN",1],[161,"001.06.02.15","Fornecimento, corte e colocação de aço CP 190 RB Ø=15,2mm, inclusive protensão","KG",1],[162,"001.06.02.16","Fornecimento e colocação de ancoragens ativas 14 ø 15,2mm","UN",1],[163,"001.06.02.17","Fornecimento e colocação de bainha metálica galvanizada semi-rígida ø=65mm, inclusive inje","M",1],[164,"001.06.02.18","Fornecimento e colocação de bainha semi-rígida metálica galvanizada øint=90mm, inclusive i","M",1],[165,"001.06.02.19","Fornecimento, instalação e protensão de ancoragem ativa 13 ø 15,20mm","UN",1],[166,"001.07","07 - CONTENÇÕES","",0],[167,"001.07.01","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equiv","UN",1],[168,"001.07.02","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equiv","UN",1],[169,"001.07.03","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equiv","UN",1],[170,"001.07.04","Fornec. e instalação de elemento de contenção gabião ancorado (Terramesh, LandPro ou equiv","UN",1],[171,"001.07.05","Fornecimento e colocação geotextil n/tecido(GNT)","M2",1],[172,"001.07.06","Gabião tipo caixa 2x1x0,50m ZN/AL + PVC  (NBR 8964)","M3",1],[173,"001.07.07","Gabião tipo caixa 2x1x1,00m ZN/AL + PVC (NBR 8964)","M3",1],[174,"001.08","08 - GALERIAS CELULARES","",0],[175,"001.08.01","Aço CA-50 fornec. dobr. colocação","KG",1],[176,"001.08.02","Argamassa cimento e areia 1:3","M3",1],[177,"001.08.03","Bombeamento de concreto","M3",1],[178,"001.08.04","Concreto magro usinado, exclusive bombeamento","M3",1],[179,"001.08.05","Concreto usinado  Fck = 20 MPa, exclusive bombeamento","M3",1],[180,"001.08.06","Escoramento cavas de fundação","M2",1],[181,"001.08.07","Formas de madeira compensada resinada","M2",1],[182,"001.09","09 - PASSA FAUNA","",0],[183,"001.09.01","Fornecimento e colocação de Cerca de tela arame galvanizado para passa fauna h=2,00m, incl","M",1],[184,"001.09.02","09.01 - Corpo de BSCC 2,00 x 2,00 H=0,00 a 1,00m 36m","",0],[185,"001.09.02.01","Aço CA-50 fornec. dobr. colocação","KG",1],[186,"001.09.02.02","Argamassa cimento e areia 1:3","M3",1],[187,"001.09.02.03","Concreto Fck = 15 MPa, preparo em betoneira e lanç.","M3",1],[188,"001.09.02.04","Concreto usinado  Fck = 20 MPa, exclusive bombeamento","M3",1],[189,"001.09.02.05","Formas de madeira compensada resinada","M2",1],[190,"001.09.03","09.02 - Boca de BSCC 2,00 x 2,00 2m","",0],[191,"001.09.03.01","Aço CA-50 fornec. dobr. colocação","KG",1],[192,"001.09.03.02","Apiloamento manual","M3",1],[193,"001.09.03.03","Argamassa cimento e areia 1:3","M3",1],[194,"001.09.03.04","Concreto Fck = 15 MPa, preparo em betoneira e lanç.","M3",1],[195,"001.09.03.05","Concreto usinado  Fck = 20 MPa, exclusive bombeamento","M3",1],[196,"001.09.03.06","Escavação de bueiros em 1a. cat.","M3",1],[197,"001.09.03.07","Formas de madeira compensada resinada","M2",1],[198,"001.09.03.08","Lastro de brita","M3",1],[199,"001.10","10 - SERVIÇOS COMPLEMENTARES","",0],[200,"001.10.01","Abrigo em parada de ônibus","UN",1],[201,"001.10.02","Barreira de siltagem","M",1],[202,"001.10.03","Cerca 4 fios c/ mourões de concreto","M",1],[203,"001.10.04","Demolição de concreto simples","M3",1],[204,"001.10.05","Relocação de portão","UN",1],[205,"001.10.06","Remoção de abrigo de ônibus","UN",1],[206,"001.10.07","Remoção de cercas","M",1],[207,"001.10.08","10.01 - Passeio","",0],[208,"001.10.08.01","Aço CA-50 fornec. dobr. colocação","KG",1],[209,"001.10.08.02","Aço CA-60 fornec. dobr. colocação","KG",1],[210,"001.10.08.03","Brita graduada 100% PM","M3",1],[211,"001.10.08.04","Concreto usinado  Fck = 20 MPa, exclusive bombeamento","M3",1],[212,"001.10.08.05","Escavação manual de vala 1a. cat.","M3",1],[213,"001.10.08.06","Formas de madeira comum","M2",1],[214,"001.10.08.07","Fornecimento e assentamento de piso tátil de concreto alerta/direcional 40x40cm vermelho","M2",1],[215,"001.10.08.08","Fornecimento e colocação de gradil metálico c/jateamento e pintura a base de epóxi c/prepa","M",1],[216,"001.10.08.09","Pavimento c/ bloco intertravado concreto (Paver-cor natural) e=6cm, incl. colchão pó de pe","M2",1],[217,"001.10.08.10","Pavimento c/ bloco intertravado concreto (Paver-cor natural) e=8cm, incl. colchão pó de pe","M2",1],[218,"001.10.08.11","Regularização compac.subleito 100% PN (B)","M2",1],[219,"001.10.09","10.02 - Rampas","",0],[220,"001.10.09.01","Argamassa cimento e areia 1:3","M3",1],[221,"001.10.09.02","Concreto usinado  Fck = 20 MPa, exclusive bombeamento","M3",1],[222,"001.10.09.03","Formas de madeira comum","M2",1],[223,"001.10.09.04","Fornecimento e assentamento de piso tátil de concreto alerta/direcional 40x40cm vermelho","M2",1],[224,"001.10.09.05","Fornecimento e colocação de Tela Telcon Q-138 ou equivalente","KG",1],[225,"001.10.09.06","Lastro de brita","M3",1],[226,"001.10.10","10.03 - Travessias elevadas","",0],[227,"001.10.10.01","Fornecimento e assentamento de piso tátil de concreto alerta/direcional 40x40cm vermelho","M2",1],[228,"001.10.11","10.04 - Paisagismo","",0],[229,"001.10.11.01","Enleivamento","M2",1],[230,"001.10.11.02","Fornecimento e colocação de geomanta ecológica","M2",1],[231,"001.10.11.03","Hidrossemeadura","M2",1],[232,"001.11","11 - SINALIZAÇÃO","",0],[233,"001.11.01","Defensa simples semi-maleável c/ espaçador e calço","M",1],[234,"001.11.02","Faixa de sinalização horizontal c/tinta resina acrílica base água","M2",1],[235,"001.11.03","Fornecimento e colocação de dispositivo refletivo para barreira New Jersey","UN",1],[236,"001.11.04","Fornecimento e colocação de dispositivo refletivo para defensa metálica","UN",1],[237,"001.11.05","Fornecimento e instalação de terminal absorvedor de energia p/ velocidade de 80 km/h de ac","CJ",1],[238,"001.11.06","Fornecimento e instalação de terminal amortecedor de impacto p/ velocidade de 80 km/h de a","UN",1],[239,"001.11.07","Pintura de setas e zebrados - termoplástico por extrusão - e=3mm","M2",1],[240,"001.11.08","Placa sinalização c/ película refletiva","M2",1],[241,"001.11.09","Pórtico simples 11,00 a 15,00m p/placa até 24m2(exclusive placa)","UN",1],[242,"001.11.10","Remoção de placa de sinalização","M2",1],[243,"001.11.11","Remoção de pórtico c/ transporte","UN",1],[244,"001.11.12","Semi-pórtico simples 8,30m p/placa até 12m2(exclusive placa)","UN",1],[245,"001.11.13","Suporte metálico galv. fogo perfil \"C\" 110x70x25x2,00mm, h=3,00m","UN",1],[246,"001.11.14","Suporte metálico galv. fogo perfil \"C\" 110x70x25x2,00mm, h=3,50m","UN",1],[247,"001.11.15","Suporte metálico galv. fogo perfil \"C\" 150x85x25x2,70mm, h=4,00m","UN",1],[248,"001.11.16","Suporte metálico galv. fogo perfil \"C\" 150x85x25x3,40mm, h=4,50m","UN",1],[249,"001.11.17","Tacha refletiva bidirecional","UN",1],[250,"001.11.18","Tacha refletiva monodirecional","UN",1],[251,"001.11.19","Tachão refletivo bidirecional","UN",1],[252,"001.12","12 - SINALIZAÇÃO PROVISÓRIA","",0],[253,"001.12.01","Bandeirinha","H",1],[254,"001.12.02","Barreira contínua classe I","M",1],[255,"001.12.03","Bastão vermelho sinalizador","UN",1],[256,"001.12.04","Boneco sinalizador de obra","UN",1],[257,"001.12.05","Cone sinalizador tipo conão/bolo de noiva h=1,10m, base 50x50cm para sinalização provisóri","UN",1],[258,"001.12.06","Faixa de sinalização horizontal provisória","M2",1],[259,"001.12.07","Luz intermitente (piscante)","UN",1],[260,"001.12.08","Placa de sinalização provisória","M2",1],[261,"001.12.09","Suporte de madeira 3\" x 3\" para sinalização provisória","UN",1],[262,"001.13","13 - MELHORIAS AMBIENTAIS","",0],[263,"001.13.01","Elaboração e implantação de programa de atendimento à emergências e plano de contingência","Mês",1],[264,"001.13.02","Elaboração e implantação do programa de comunição social","Mês",1],[265,"001.13.03","Monitoramento da qualidade das águas superficiais - 3 rios","Mês",1],[266,"001.13.04","Monitoramento de ruidos","Mês",1],[267,"001.13.05","Programa de diagnóstico e monitorammento de atropelamento de fauna","Mês",1],[268,"001.13.06","Programa de monitoramento arqueológico","Mês",1],[269,"001.13.07","Programa de monitoramento dos poluente atmosféricos","Mês",1],[270,"001.14","14 - ILUMINAÇÃO","",0],[271,"001.14.01","Cabo cobre nú 16mm²","M",1],[272,"001.14.02","Cabo flexível PVC 0,6/1 kv - 2,5 mm²","M",1],[273,"001.14.03","Cabo flexível 1 Kv Alumínio Triplex - 16 mm²","M",1],[274,"001.14.04","Caixa de passagem 30x30x30 cm com tampa","PÇ",1],[275,"001.14.05","Caixa de passagem 60x60x60 cm com tampa em ferro fundido padrão COPEL","PÇ",1],[276,"001.14.06","Conector de derivação","PÇ",1],[277,"001.14.07","Conector split bolt bimetálico aaté 25mm²","PÇ",1],[278,"001.14.08","Eletroduto aço galvanizado 40mm","BR",1],[279,"001.14.09","Eletroduto corrugado 50mm PEAD","M",1],[280,"001.14.10","Fita aço inox 19,5 mm","RL",1],[281,"001.14.11","Fita isolante altofusão","M",1],[282,"001.14.12","Fita isolante PVC 750V","RL",1],[283,"001.14.13","Grampo de aterramento","PÇ",1],[284,"001.14.14","Haste de aterramento","PÇ",1],[285,"001.14.15","Luminária LED 153W","UN",1],[286,"001.14.16","Luminária LED 253W","UN",1],[287,"001.14.17","Poste cônico curvo de 12,0m de altura útil em aço galvanizado a fogo, engastado","UN",1],[288,"001.14.18","Poste cônico reto de 12,0m de altura útil em aço galvanizado a fogo, engastado","UN",1],[289,"001.14.19","Relé fotoelétrico c/ base","PÇ",1],[290,"001.14.20","Suporte triplo para luminária aço galvanizado","PÇ",1],[291,"001.14.21","Abertura de valeta para rede subterrânea","US",1],[292,"001.15","15 - INTERFERÊNCIAS","",0],[293,"001.15.01","COPEL","",0],[294,"001.15.01.01","Execução de obra no sistema de distribuição de energia elétrica - COPEL","VB",1],[295,"001.15.02","SANEPAR","",0],[296,"001.15.02.01","Remanejamento do abastecimento SANEPAR perímetro urbano","VB",1],[297,"001.15.03","REMANEJAMENTO DA REDE PÚBLICA DE SANEAMENTO E ESGOTO","",0],[298,"001.15.03.01","Assentamento de tubulação PVC JE/JEI para água DN 75mm","M",1],[299,"001.15.03.02","Enleivamento","M2",1],[300,"001.15.03.03","Escavação de valas de drenagem 1ª cat.","M3",1],[301,"001.15.03.04","Lastro de brita","M3",1],[302,"001.15.03.05","Reaterro e apiloamento mecânico","M3",1],[303,"001.16","16 - MOBILIZAÇÃO E DESMOBILIZAÇÃO","",0],[304,"001.16.01","Mobilização e desmobilização","VB",1]]};
+
+// ===== núcleo: leitura da medição e casamento com o DRO =====
+const UNITS=new Set(['m3','m2','m','t','un','ud','und','kg','h','mes','mês','vb','br','rl','pç','pc','us','l','km','cj','gl']);
+const norm=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+const numBR=s=>{s=String(s).trim(); if(!/^-?[\d.]*\d,\d+$/.test(s)&&!/^-?\d+$/.test(s)) return NaN; return parseFloat(s.replace(/\./g,'').replace(',','.'));};
+const near=(a,b,rel=0.0005,abs=0.006)=>Math.abs(a-b)<=Math.max(abs,Math.abs(b)*rel);
+
+// lista da medição (ordem oficial) com cabeçalho de subseção de cada item
+function medList(){
+  const out=[]; let sec=null, sub=null;
+  BASE.med.forEach((e,i)=>{
+    if(e[0]==='h'){ const isSec=/^\d+$/.test(e[1])&&+e[1]<100; if(isSec){sec=e[2];sub=e[2];} else sub=e[2]; return; }
+    out.push({i,code:e[1],desc:e[2],un:e[3],qc:e[4],pu:e[5],dro:e[6],sec,sub});
+  });
+  return out;
+}
+const MED=medList();
+const HEADERS=BASE.med.filter(e=>e[0]==='h').map(e=>norm(e[2]));
+
+// ---- XLSX (Medição Resumo): A código, B serviço, C un, D qtde contrato, G líq. atual, I preço, K financeiro líq. atual
+function matchXlsx(rows){
+  const used=new Set(), res=[], unmatched=[]; let totalK=null;
+  for(const r of rows){
+    if(/total da presente medi/i.test(r.B||'')){ totalK=r.K; continue; }
+    if(!r.C||typeof r.D!=='number'||typeof r.I!=='number') continue;
+    const q=typeof r.G==='number'?r.G:0;
+    let c=MED.filter(m=>!used.has(m.i)&&near(m.qc,r.D)&&near(m.pu,r.I));
+    if(c.length>1){ const cc=c.filter(m=>norm(m.code)===norm(r.A)); if(cc.length) c=cc; }
+    if(!c.length) c=MED.filter(m=>!used.has(m.i)&&norm(m.code)===norm(r.A)&&near(m.pu,r.I));
+    if(!c.length){ unmatched.push({code:r.A,desc:r.B,un:r.C,pu:r.I,q}); continue; }
+    used.add(c[0].i); res.push({m:c[0],q,src:r});
+  }
+  return {res,unmatched,total:totalK,kind:'xlsx'};
+}
+
+// ---- PDF: linhas reconstruídas [{cells:[{x,s}]}]
+function parsePdfLines(lines){
+  const items=[]; let ctx=null, pending=null, period=null, totalObra=null, medNum=null, reajuste=null, totalReaj=null, contrato=null, valorP0=null, saldo=null, acum=null, database=null, contratual=null;
+  for(const L of lines){
+    const toks=L.cells.map(c=>c.s).filter(Boolean); const txt=toks.join(' ');
+    let m=txt.match(/Per[ií]odo da medi[cç][aã]o\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i); if(m&&!period) period={mm:+m[2],yy:+m[3]};
+    m=txt.match(/^Medi[cç][aã]o\s*:?\s*(\d+)/i); if(m&&!medNum) medNum=+m[1];
+    m=txt.match(/Valor de reajuste\s*:?\s*R\$\s*(-?[\d.]+,\d{2})/i); if(m&&reajuste==null) reajuste=numBR(m[1]);
+    m=txt.match(/Total da presente medi[cç][aã]o\s*:?\s*R\$\s*(-?[\d.]+,\d{2})/i); if(m&&totalReaj==null) totalReaj=numBR(m[1]);
+    m=txt.match(/Contrato\s*:?\s*(CO\d+\/\d{4}\w*)/i); if(m&&!contrato) contrato=m[1].toUpperCase();
+    const N3=t=>{const a=t.match(/-?[\d.]+,\d{2}/g)||[]; return a.map(numBR);};
+    if(/pre[cç]os iniciais/i.test(txt)&&/desta medi/i.test(txt)&&valorP0==null){ const n=N3(txt); if(n.length) valorP0=n[n.length-1]; }
+    if(/^Saldo\b/i.test(txt)&&!saldo){ const n=N3(txt); if(n.length>=3) saldo={p0:n[0],reaj:n[1],total:n[2]}; }
+    if(/^Medi[cç][oõ]es acumuladas/i.test(txt)&&!acum){ const n=N3(txt); if(n.length>=3) acum={p0:n[0],reaj:n[1],total:n[2]}; }
+    if(/^Valor contratual/i.test(txt)&&contratual==null){ const n=N3(txt); if(n.length) contratual=n[0]; }
+    m=txt.match(/Data-base\s*\(Atual\)\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i); if(m&&!database) database=m[1];
+    if(/^Total obra/i.test(txt)&&totalObra===null){ const n=toks.slice(1).map(numBR); if(n.length>=2&&!isNaN(n[0])) totalObra=n[0]; continue; }
+    const ui=toks.findIndex((t,k)=>k>0&&UNITS.has(t.toLowerCase())&&toks.slice(k+1).filter(x=>!isNaN(numBR(x))).length>=4);
+    if(ui<0){
+      // cabeçalho de seção/subseção ou início de descrição quebrada
+      const first=L.cells[0];
+      if(first&&first.x<70&&/^\d{3,}$/.test(first.s)&&toks.length>=2&&isNaN(numBR(toks[1]))&&!toks.slice(1).some(t=>!isNaN(numBR(t)))) { pending={code:first.s,desc:toks.slice(1).filter(t=>!/^[\d.,]+$/.test(t)).join(' ')}; continue; }
+      const nameT=toks.filter(t=>isNaN(numBR(t))&&!/^\d+$/.test(t)).join(' ');
+      if(nameT&&toks.some(t=>!isNaN(numBR(t)))){ const n=norm(nameT); if(HEADERS.some(h=>h===n||h.includes(n)||n.includes(h))) ctx=n; else ctx=n; pending=null; }
+      continue;
+    }
+    let code=null, desc;
+    const first=L.cells[0];
+    if(first&&first.x<70&&/^[\dA-Z][\w-]*$/.test(first.s)&&ui>1){ code=first.s; desc=toks.slice(1,ui).join(' '); }
+    else { desc=toks.slice(0,ui).join(' '); if(pending){ code=pending.code; desc=pending.desc+' '+desc; } }
+    pending=null;
+    const nums=toks.slice(ui+1).map(numBR).filter(v=>!isNaN(v));
+    const [qm,qa,vm,va]=nums.slice(-4);
+    let pu=nums.length>=5?nums[nums.length-5]:NaN;
+    if(isNaN(pu)||(qa&&!near(pu*qa,va,0.002,0.05))) pu=qa?va/qa:(qm?vm/qm:NaN);
+    items.push({code,desc:desc.trim(),un:toks[ui],pu,qm,qa,vm,va,ctx});
+  }
+  return {items,period,totalObra,medNum,reajuste,totalReaj,contrato,valorP0,saldo,acum,database,contratual};
+}
+function matchPdf(parsed){
+  const used=new Set(), res=[], unmatched=[]; let last=-1;
+  for(const it of parsed.items){
+    let c=MED.filter(m=>!used.has(m.i)&&near(m.pu,it.pu,0.0005,0.006));
+    if(!c.length){ unmatched.push(it); continue; }
+    const score=m=>{ let s=0;
+      if(it.code&&norm(m.code)===norm(it.code)) s+=100; else if(it.code&&norm(m.code).endsWith(norm(it.code))) s+=60;
+      if(it.ctx&&(norm(m.sub)===it.ctx||norm(m.sec)===it.ctx)) s+=30;
+      const nd=norm(it.desc), md=norm(m.desc); if(nd&&md&&(nd===md||nd.startsWith(md.slice(0,25))||md.startsWith(nd.slice(0,25)))) s+=20;
+      if(m.i>last) s+=10-Math.min(9,(m.i-last)/40);
+      return s; };
+    c.sort((a,b)=>score(b)-score(a));
+    const best=c[0]; if(c.length>1&&score(best)<20){ unmatched.push(it); continue; }
+    used.add(best.i); last=best.i; res.push({m:best,q:it.qm,src:it});
+  }
+  return {res,unmatched,total:parsed.totalObra,period:parsed.period,medNum:parsed.medNum,reajuste:parsed.reajuste,totalReaj:parsed.totalReaj,contrato:parsed.contrato,kind:'pdf'};
+}
+// resultado nas linhas do DRO
+function toDro(match){
+  const byRow=new Map(match.res.map(r=>[r.m.dro,r]));
+  let sumVal=0; match.res.forEach(r=>sumVal+=r.q*r.m.pu);
+  const rows=BASE.dro.map(([row,item,desc,un,isItem])=>({row,item,desc,un,isItem,q:isItem?(byRow.get(row)?.q??0):null,found:byRow.has(row)}));
+  return {rows,sumVal};
+}
+
+// ===== NFS-e (DANFSe): valor logo abaixo do rótulo =====
+function phrases(cells){ const out=[]; for(const c of cells){ const p=out[out.length-1];
+    if(p&&c.w!=null&&p.end!=null&&c.x-p.end<9){ p.s+=' '+c.s; p.end=c.x+c.w; } else out.push({x:c.x,s:c.s,end:c.w!=null?c.x+c.w:null}); } return out; }
+function nfFromLines(lines0){
+  const lines=lines0.map(l=>({cells:phrases(l.cells)}));
+  const all=lines.map(l=>l.cells.map(c=>c.s).join(' ')).join('\n');
+  const isNF=/NFS-?e|DANFS/i.test(all);
+  const below=(label,re)=>{ const nl=norm(label);
+    for(let i=0;i<lines.length;i++){ const c=lines[i].cells.find(c=>{const n=norm(c.s).replace(/^_+/,''); return n===nl||n.startsWith(nl);}); if(!c) continue;
+      // mesmo bloco de texto: valor na mesma célula após o rótulo
+      for(let k=i+1;k<Math.min(lines.length,i+3);k++){ const v=lines[k].cells.filter(d=>Math.abs(d.x-c.x)<25).map(d=>d.s).join(' ');
+        const m=v.match(re); if(m) return m[1]; } }
+    return null; };
+  const money=/(-?[\d.]+,\d{2})/, date=/(\d{2}\/\d{2}\/\d{4})/;
+  const g=(l,re)=>below(l,re);
+  const nf={isNF, numero:g('numero da nfs e',/^\s*(\d+)\b/), emissao:g('data e hora da emiss',date)||g('competencia da nfs',date),
+    valor:numBR(g('valor da opera',money)), iss:numBR(g('issqn apurado',money)), irrf:numBR(g('irrf',money)),
+    retencoes:numBR(g('total das reten',money)), liquido:numBR(g('valor liquido da nfs e',money)), bc:numBR(g('bc issqn',money))};
+  const flat=norm(all);
+  let m=flat.match(/(\d+)\s*(?:a\s*)?medicao/); nf.medNum=m?+m[1]:null;
+  m=all.match(/CONTRATO\s*(?:N[ºo°.]*\s*)?(\d{2,3}\/\d{4})/i); nf.contrato=m?m[1]:null;
+  nf.obra=/050\/2024|REBOU/i.test(all)?'Rebouças':(/RIOZINHO|IRATI|101\/20/i.test(all)?'Riozinho ':null);
+  m=all.match(/\b(\d{50})\b/); nf.chave=m?m[1]:null; if(nf.chave&&!nf.numero) nf.numero=String(+nf.chave.slice(22,35));
+  return nf;
+}
+// regras de retenção do CO050 (NF 302): ISS 5% sobre 60% do valor (dedução de 40% de materiais), IRRF 1,2%
+const r2=v=>Math.round(v*100+1e-9)/100;
+function nfRegras(valor){ return {iss:r2(valor*0.6*0.05), irrf:r2(valor*0.012)}; }
+if(typeof module!=='undefined') module.exports={parsePdfLines,matchPdf,matchXlsx,toDro,MED,numBR};
+
+const SAMPLE=[[11, 6333.04], [13, 2017.06], [16, 764.69], [17, 3527.78], [19, 66.49], [21, 1831.11], [25, 1843.82], [26, 4430.89], [39, 2573.94], [41, 3373.95], [42, 2573.94], [44, 716.8], [45, 236.97], [51, 3456], [54, 3299.4], [57, 3.45], [72, 46.6], [74, 23.3], [86, 2125.24], [95, 793.75], [102, 2486.5], [106, 15], [111, 60.4], [115, 11.48], [121, 47.19], [175, 4071.77], [177, 57.54], [179, 57.54], [234, 374.4]];
+const $=id=>document.getElementById(id);
+const MESES=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const MESES_FULL=['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function colLetter(n){let s='';while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26);}return s;}
+// PLAN. CONTROLE: QTDE M (13) = dez/23 … BI (61) = dez/27 · PROD. P0 BK (63) = dez/23 … DG (111)
+const OFFSET=478;            // bloco 001 vigente: linhas 485–782 (= linhas 7–304 + 478)
+function idxMes(yy,mm){return (yy-2023)*12+(mm-12);}
+function qtdCol(yy,mm){return colLetter(13+idxMes(yy,mm));}
+function prodCol(yy,mm){return colLetter(63+idxMes(yy,mm));}
+// PRODUÇÃO: ago/26 está na linha 37; uma linha por mês daí em diante
+function prodRow(yy,mm){return 37+((yy-2026)*12+(mm-8));}
+(function fillMeses(){const sel=$('mes');for(let y=2023,m=12;;){if(idxMes(y,m)>48)break;const o=document.createElement('option');o.value=y+'-'+m;o.textContent=MESES[m-1]+'/'+String(y).slice(2)+'  →  '+qtdCol(y,m);sel.appendChild(o);m++;if(m>12){m=1;y++;}}})();
+let state={rows:null,source:'',kind:''};
+const fmt=(v,d=3)=>v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:d});
+const brl=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+function setMonth(yy,mm){$('mes').value=yy+'-'+mm;updateDest();}
+function curMes(){return $('mes').value.split('-').map(Number);}
+function prodLine(){const [y,m]=curMes();return `='PLAN. CONTROLE'!${prodCol(y,m)}2\t01/${String(m).padStart(2,'0')}/${y}`;}
+function updateDest(){const [y,m]=curMes();
+  $('dest').textContent='PLAN. CONTROLE › '+qtdCol(y,m)+(7+OFFSET);
+  $('prodCalc').textContent=prodCol(y,m);
+  $('pRow').textContent=prodRow(y,m); $('pRowPrev').textContent=prodRow(y,m)-1; $('pRow2').textContent=prodRow(y,m);
+  $('pH').textContent=`='PLAN. CONTROLE'!${prodCol(y,m)}2`; $('pI').textContent=`01/${String(m).padStart(2,'0')}/${y}`;
+  if(!nf.ctlTouched) $('nfCtl').value=ctlGuess(y,m); nfUpdate();}
+$('mes').addEventListener('change',updateDest);
+// NOTAS FISCAIS: um par de linhas por mês (Riozinho, Rebouças); ago/26 = 58/59
+function nfRebRow(yy,mm){return 59+2*((yy-2026)*12+(mm-8));}
+// CONTROLE DE MEDIÇÕES: medição 25 (ago/26) do CO050 está na linha 51
+function ctlGuess(yy,mm){return 51+((yy-2026)*12+(mm-8));}
+
+function render(){
+  const only=$('onlyQ').checked, tb=$('tb'); const frag=document.createDocumentFragment();
+  for(const r of state.rows){
+    if(only&&!(r.isItem&&r.q)) continue;
+    const tr=document.createElement('tr');
+    tr.className=!r.isItem?'h':(r.q?'has':'miss');
+    const q=!r.isItem?'':(r.q?fmt(r.q):'0');
+    tr.innerHTML=`<td class="r">${r.row+OFFSET}</td><td>${r.item??''}</td><td></td><td>${r.un??''}</td><td class="n q">${q}</td>`;
+    tr.children[2].textContent=r.desc??'';
+    frag.appendChild(tr);
+  }
+  tb.replaceChildren(frag);
+}
+$('onlyQ').addEventListener('change',()=>state.rows&&render());
+
+function showResult(match,{source,kind,period,fileMonth}){
+  const d=toDro(match); state={rows:d.rows,source,kind};
+  $('sFonte').innerHTML='';$('sFonte').append(source);
+  const sm=document.createElement('small');sm.textContent='  '+(kind==='pdf'?'relatório PDF':kind==='xlsx'?'planilha xlsx':'exemplo');$('sFonte').append(sm);
+  const nItens=BASE.dro.filter(r=>r[4]).length, nQ=d.rows.filter(r=>r.isItem&&r.q).length;
+  $('sCasados').innerHTML=`${match.res.length} <small>de ${kind==='pdf'?match.res.length+match.unmatched.length+' no relatório':nItens}</small> · ${nQ} <small>com qtd</small>`;
+  if(match.total!=null&&!isNaN(match.total)){
+    const diff=Math.abs(d.sumVal-match.total), ok=diff<=1;
+    $('sConf').innerHTML=`${brl(d.sumVal)} <span class="pill ${ok?'ok':'bad'}">${ok?'confere':'difere '+brl(diff)}</span><br><small>total do arquivo ${brl(match.total)}</small>`;
+  } else $('sConf').innerHTML=`${brl(d.sumVal)} <small>sem total no arquivo</small>`;
+  if(period) setMonth(period.yy,period.mm); else if(fileMonth) setMonth(fileMonth.yy,fileMonth.mm);
+  const al=$('alert');
+  if(match.unmatched.length){
+    $('alertT').textContent=`${match.unmatched.length} serviço(s) do arquivo sem correspondência no DRO — não entraram na coluna`;
+    $('alertL').replaceChildren(...match.unmatched.slice(0,30).map(u=>{const li=document.createElement('li');li.textContent=`${u.code??''} ${u.desc??''} · ${u.un??''} · preço ${u.pu!=null?fmt(u.pu,4):'?'} · qtd ${fmt(u.qm??u.q??0)}`;return li;}));
+    al.hidden=false;
+  } else al.hidden=true;
+  render();
+}
+
+function columnText(){
+  const blank=$('zeros').checked;
+  return state.rows.map(r=>!r.isItem?'':(r.q?String(+r.q.toFixed(6)).replace('.',','):(blank?'':'0'))).join('\r\n');
+}
+$('copy').addEventListener('click',()=>{
+  if(!state.rows) return; const txt=columnText(); const fb=$('fallback');
+  const done=()=>{$('msg').textContent=`Copiado: ${state.rows.length} linhas (${7+OFFSET} a ${304+OFFSET}). No DRO, clique em ${$('dest').textContent.split('› ')[1]} e cole com Colar especial › Valores.`;};
+  try{ navigator.clipboard.writeText(txt).then(()=>{fb.hidden=true;done();},()=>{fb.hidden=false;fb.value=txt;fb.select();$('msg').textContent='Copie o texto selecionado abaixo (Ctrl+C).';}); }
+  catch(e){ fb.hidden=false;fb.value=txt;fb.select();$('msg').textContent='Copie o texto selecionado abaixo (Ctrl+C).'; }
+});
+
+$('copyProd').addEventListener('click',()=>{
+  const txt=prodLine(); const fb=$('fallback');
+  try{ navigator.clipboard.writeText(txt).then(()=>{fb.hidden=true;$('msg').textContent='Copiado: fórmula de H e mês de I. Cole na coluna H da linha '+$('pRow').textContent+' da PRODUÇÃO.';},()=>{fb.hidden=false;fb.value=txt;fb.select();$('msg').textContent='Copie o texto selecionado abaixo (Ctrl+C).';}); }
+  catch(e){ fb.hidden=false;fb.value=txt;fb.select(); }
+});
+
+// ---------- etapa 3: nota fiscal ----------
+let nf={ctlTouched:false}, cmPrevTouched=false, medInfo={totalReaj:1877449.55,reajuste:99068.92,medNum:25,src:'exemplo',valorP0:1778380.63,saldo:{p0:35660305.09,reaj:594994.59,total:36255299.68},acum:{p0:51639694.91,reaj:2763120.16,total:54402815.07},database:'01/09/2023',contratual:87300000};
+const pBR=v=>{v=String(v??'').trim(); if(!v) return NaN; return v.includes(',')?numBR(v.replace(/[R$\s]/g,'')):parseFloat(v);};
+const dec=v=>String(r2(v)).replace('.',',');
+function nfFill(o){ if(o.numero) $('nfNum').value=o.numero; if(o.emissao) $('nfEmi').value=o.emissao;
+  if(o.valor) $('nfVal').value=brl(o.valor); if(o.iss) $('nfIss').value=brl(o.iss); if(o.irrf) $('nfIrrf').value=brl(o.irrf);
+  if(o.obra) $('nfObra').value=o.obra; nfUpdate(); }
+function nfUpdate(){
+  const [y,m]=curMes(); const obra=$('nfObra').value; const reb=nfRebRow(y,m); const row=obra==='Rebouças'?reb:reb-1;
+  $('nfRow').textContent=row; $('nfObraT').textContent=obra.trim(); $('rioRow').textContent=reb-1;
+  const E=pBR($('nfVal').value), iss=pBR($('nfIss').value), irrf=pBR($('nfIrrf').value), ctl=$('nfCtl').value.trim();
+  const F=ctl?`='CONTROLE DE MEDIÇÕES'!J${ctl}`:(medInfo.reajuste!=null?dec(medInfo.reajuste):'');
+  const cells=[ $('nfEmi').value.trim(), `01/${String(m).padStart(2,'0')}/${y}`, '', $('nfNum').value.trim(), isNaN(E)?'':dec(E), F,
+    (isNaN(iss)||isNaN(irrf))?'':`=${dec(iss)}+${dec(irrf)}`, `=E${row}-G${row}`, '', `=H${row}`, '', '', obra ];
+  nf.line=cells.join('\t'); $('nfPreview').textContent=cells.map((c,i)=>'ABCDEFGHIJKLM'[i]+': '+(c||'—')).join('  ·  ');
+  const ck=[]; const add=(ok,t)=>ck.push(`<li class="${ok===null?'warn':ok?'ok':'bad'}">${t}</li>`);
+  if(!isNaN(E)){ const R=nfRegras(E);
+    if(medInfo.totalReaj!=null) add(Math.abs(E-medInfo.totalReaj)<0.01,`Valor ${brl(E)} × medição ${medInfo.medNum??''} reajustada ${brl(medInfo.totalReaj)}`);
+    if(!isNaN(iss)) add(Math.abs(iss-R.iss)<0.02,`ISS ${brl(iss)} × regra 5% s/ 60% = ${brl(R.iss)}`);
+    if(!isNaN(irrf)) add(Math.abs(irrf-R.irrf)<0.02,`IRRF ${brl(irrf)} × regra 1,2% = ${brl(R.irrf)}`);
+    if(!isNaN(iss)&&!isNaN(irrf)){ const liq=E-iss-irrf; const hasL=Number.isFinite(nf.liquido); add(hasL?Math.abs(liq-nf.liquido)<0.02:null,`Líquido (H) ${brl(liq)}${hasL?' × nota '+brl(nf.liquido):' (confira com a nota)'}`); }
+  }
+  if(nf.medNum!=null&&medInfo.medNum!=null&&medInfo.src!=='exemplo') add(nf.medNum===medInfo.medNum,`Nota cita a medição ${nf.medNum}; relatório carregado é a ${medInfo.medNum}`);
+  if(!$('nfNum').value.trim()||!$('nfEmi').value.trim()) add(null,'Preencha nº e data de emissão (nota digitalizada não tem texto).');
+  if(ctl&&medInfo.reajuste!=null) add(null,`Confira: J${ctl} da CONTROLE DE MEDIÇÕES deve mostrar ${brl(medInfo.reajuste)}`);
+  $('nfChecks').innerHTML=ck.join('');
+  if(typeof cmUpdate==='function'&&document.getElementById('cmPreview')) try{cmUpdate();}catch(e){}
+  if(typeof mdUpdate==='function'&&document.getElementById('mdTb')) try{mdUpdate();}catch(e){}
+  $('nfRioNote').textContent=obra==='Rebouças'?`A linha ${reb-1} é do Riozinho neste mês. Sem medição do Riozinho, deixe só "Riozinho" na coluna M dela.`:`A linha ${reb} é a do Rebouças neste mês.`;
+}
+['nfNum','nfEmi','nfVal','nfIss','nfIrrf','nfObra'].forEach(id=>$(id).addEventListener('input',nfUpdate));
+$('nfObra').addEventListener('change',nfUpdate);
+$('nfCtl').addEventListener('input',()=>{nf.ctlTouched=true;nfUpdate();});
+$('nfVal').addEventListener('change',()=>{ const E=pBR($('nfVal').value); if(!isNaN(E)&&!nf.fromText){ const R=nfRegras(E); $('nfIss').value=brl(R.iss); $('nfIrrf').value=brl(R.irrf); nfUpdate(); } });
+function copyText(txt,okMsg){ const fb=$('fallback');
+  try{ navigator.clipboard.writeText(txt).then(()=>{fb.hidden=true;$('msg').textContent=okMsg;},()=>{fb.hidden=false;fb.value=txt;fb.select();$('msg').textContent='Copie o texto selecionado abaixo (Ctrl+C).';}); }
+  catch(e){ fb.hidden=false;fb.value=txt;fb.select(); } }
+$('copyNF').addEventListener('click',()=>copyText(nf.line,`Copiado: linha ${$('nfRow').textContent} (A:M). Na NOTAS FISCAIS, clique em A${$('nfRow').textContent} e cole (Ctrl+V).`));
+$('copyRio').addEventListener('click',()=>copyText('Riozinho ',`Copiado. Cole em M${$('rioRow').textContent} da NOTAS FISCAIS.`));
+
+// ---------- etapa 4: CONTROLE DE MEDIÇÕES ----------
+function cmFill(){ const v=(id,x)=>{$(id).value=(x==null||isNaN(x))?'':(id==='cmNum'?x:brl(x));};
+  v('cmNum',medInfo.medNum); v('cmD',medInfo.valorP0); v('cmH',medInfo.reajuste); v('cmM',medInfo.saldo?.p0); v('cmO',medInfo.saldo?.total); cmUpdate(); }
+function cmUpdate(){
+  const [y,m]=curMes(); const r=+$('nfCtl').value||ctlGuess(y,m); $('cmRowT').textContent=r;
+  if(!cmPrevTouched) $('cmPrev').value=r-1; const p=$('cmPrev').value.trim();
+  const D=pBR($('cmD').value),H=pBR($('cmH').value),M=pBR($('cmM').value),O=pBR($('cmO').value);
+  const q=x=>isNaN(x)?'':dec(x);
+  const db=medInfo.database||'01/09/2023', Q=medInfo.contratual||87300000;
+  const cells=[ $('cmNum').value.trim(), `01/${String(m).padStart(2,'0')}/${y}`, 'APROVADA', q(D), '', '', `=D${r}`, q(H), '', `=H${r}`, `=D${r}+H${r}`,
+    p?`=L${p}+K${r}`:'', q(M), `=(1-(M${r}/O${r}))`, q(O), 'CO050', String(Q), db, `=O${r}+L${r}` ];
+  cm.line=cells.join('\t'); $('cmPreview').textContent=cells.map((c,i)=>'ABCDEFGHIJKLMNOPQRS'[i]+': '+(c||'—')).join('  ·  ');
+  const ck=[]; const add=(ok,t)=>ck.push(`<li class="${ok===null?'warn':ok?'ok':'bad'}">${t}</li>`);
+  if(!isNaN(D)&&!isNaN(H)){ const K=D+H, E=pBR($('nfVal').value);
+    if(!isNaN(E)) add(Math.abs(K-E)<0.01,`K = D+H = ${brl(K)} × nota fiscal ${brl(E)}`);
+    if(medInfo.totalObra!=null) add(Math.abs(D-medInfo.totalObra)<0.01,`D ${brl(D)} × total P0 do relatório ${brl(medInfo.totalObra)}`); }
+  if(!isNaN(M)&&!isNaN(O)) add(null,`N = 1 − M/O = ${(100*(1-M/O)).toLocaleString('pt-BR',{maximumFractionDigits:4})}%`);
+  if(medInfo.acum) add(null,`Depois de colar, L${r} deve ficar perto do acumulado oficial do DER: ${brl(medInfo.acum.total)}`);
+  if(!$('cmNum').value.trim()||isNaN(D)||isNaN(H)) add(null,'Sem relatório PDF da medição: preencha nº, D, H, M e O.');
+  $('cmChecks').innerHTML=ck.join('');
+}
+const cm={};
+['cmNum','cmD','cmH','cmM','cmO'].forEach(id=>$(id).addEventListener('input',cmUpdate));
+$('cmPrev').addEventListener('input',()=>{cmPrevTouched=true;cmUpdate();});
+$('nfCtl').addEventListener('input',cmUpdate);
+$('copyCM').addEventListener('click',()=>copyText(cm.line,`Copiado: linha ${$('cmRowT').textContent} (A:S). Na CONTROLE DE MEDIÇÕES, clique em A${$('cmRowT').textContent} e cole (Ctrl+V).`));
+
+// ---------- etapa 5: MEDIÇÕES ----------
+function mdBase(yy,mm){return 112+4*((yy-2026)*12+(mm-8));}
+const md={};
+function mdUpdate(){
+  const [y,m]=curMes(); const b=mdBase(y,m); const reb=+$('nfCtl').value||ctlGuess(y,m); const rio=$('mdRio').value.trim();
+  const B=`01/${String(m).padStart(2,'0')}/${y}`; const ref=(c,r)=>`='CONTROLE DE MEDIÇÕES'!${c}${r}`;
+  const rows=[['P0',B,rio?ref('G',rio):'0','Riozinho'],['Reajuste',B,rio?ref('J',rio):'0',''],['P0',B,ref('G',reb),'Rebouças'],['Reajuste',B,ref('J',reb),'']];
+  md.text=rows.map(r=>r.join('\t')).join('\r\n');
+  $('mdRows').textContent=`${b}–${b+3}`; $('mdA').textContent=b;
+  $('mdTb').innerHTML=rows.map((r,k)=>`<tr><td class="r">${b+k}</td>${r.map(c=>`<td>${c||'—'}</td>`).join('')}</tr>`).join('');
+}
+$('mdRio').addEventListener('input',mdUpdate);
+$('nfCtl').addEventListener('input',mdUpdate);
+$('copyMD').addEventListener('click',()=>copyText(md.text,`Copiado: linhas ${$('mdRows').textContent} (A:D). Na MEDIÇÕES, clique em A${$('mdA').textContent} e cole (Ctrl+V).`));
+
+// ---------- etapa 6: MEDIÇÕES CEQ ----------
+// uma linha por mês de competência; jul/26 = linha 29. H = − valor líquido da medição de equipamentos
+function ceqRowFor(yy,mm){return 29+((yy-2026)*12+(mm-7));}
+const ceq={};
+(function(){const sel=$('ceqMes');for(let y=2025,m=2;;){if(y>2027)break;const o=document.createElement('option');o.value=y+'-'+m;o.textContent=MESES[m-1]+'/'+String(y).slice(2)+'  →  linha '+ceqRowFor(y,m);sel.appendChild(o);m++;if(m>12){m=1;y++;}} sel.value='2026-7';})();
+function ceqUpdate(){
+  const [y,m]=$('ceqMes').value.split('-').map(Number); const r=ceqRowFor(y,m); const last=new Date(y,m,0).getDate();
+  const A=`${String(last).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`; const V=pBR($('ceqVal').value);
+  const cells=[A,'CONSTRUTORA TRIUNFO S A','MEDIÇÃO CEQ',' Medicao de equipamentos-CEQ (Interna)','710201010003','LOCAÇÃO DE EQUIPAMENTOS PRÓPRIOS','430400200001',isNaN(V)?'':dec(-Math.abs(V))];
+  ceq.line=cells.join('\t'); $('ceqRow').textContent=r; $('ceqComp').textContent=A;
+  $('ceqPreview').textContent=cells.map((c,i)=>'ABCDEFGH'[i]+': '+(c||'—')).join('  ·  ');
+}
+$('ceqMes').addEventListener('change',ceqUpdate); $('ceqVal').addEventListener('input',ceqUpdate);
+$('copyCEQ').addEventListener('click',()=>copyText(ceq.line,`Copiado: linha ${$('ceqRow').textContent} (A:H). Na MEDIÇÕES CEQ, clique em A${$('ceqRow').textContent} e cole (Ctrl+V).`));
+// ---------- leitores ----------
+async function getPdfLib(){
+  if(window.pdfjsLib){ if(!window.pdfjsLib.GlobalWorkerOptions.workerSrc) window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; return window.pdfjsLib; }
+  if(window.pdfjsLibReady) return await window.pdfjsLibReady;
+  throw new Error('Não consegui carregar o leitor de PDF. Verifique a conexão e recarregue a página.');
+}
+async function pdfLines(buf){
+  const lib=await getPdfLib();
+  const doc=await lib.getDocument({data:new Uint8Array(buf),isEvalSupported:false}).promise; const out=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p); const tc=await page.getTextContent(); const vt=page.getViewport({scale:1}).transform; const rows=[];
+    for(const it of tc.items){ if(!it.str||!it.str.trim()) continue; const m=lib.Util.transform(vt,it.transform); const x=m[4],y=m[5];
+      let r=rows.find(r=>Math.abs(r.y-y)<2.5); if(!r){r={y,items:[]};rows.push(r);} r.items.push({x,s:it.str,w:it.width}); }
+    rows.sort((a,b)=>a.y-b.y);
+    for(const r of rows){ r.items.sort((a,b)=>a.x-b.x); out.push({page:p,cells:r.items.map(i=>({x:Math.round(i.x),s:i.s.trim(),w:i.w}))}); }
+  }
+  return out;
+}
+async function xlsxOpen(buf){
+  if(!window.JSZip) throw new Error('Não consegui carregar o leitor de xlsx. Verifique a conexão e recarregue a página.');
+  const zip=await JSZip.loadAsync(buf); const P=new DOMParser();
+  const xml=async p=>{const f=zip.file(p);return f?P.parseFromString(await f.async('string'),'application/xml'):null;};
+  const wb=await xml('xl/workbook.xml'), rels=await xml('xl/_rels/workbook.xml.rels');
+  const sheets=[...wb.getElementsByTagName('sheet')].map(s=>({name:s.getAttribute('name'),rid:s.getAttribute('r:id')||s.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')}));
+  return {zip,P,xml,wb,rels,sheets};
+}
+async function xlsxSheet(X,pick,COLS){
+  const {zip,xml,rels}=X;
+  const rel=[...rels.getElementsByTagName('Relationship')].find(r=>r.getAttribute('Id')===pick.rid);
+  let target=rel.getAttribute('Target'); target=target.startsWith('/')?target.slice(1):'xl/'+target.replace(/^\.\//,'');
+  const ssx=await xml('xl/sharedStrings.xml');
+  const ss=ssx?[...ssx.getElementsByTagName('si')].map(si=>[...si.getElementsByTagName('t')].map(t=>t.textContent).join('')):[];
+  const sh=await xml(target); const rows=[];
+  for(const row of sh.getElementsByTagName('row')){
+    const o={};
+    for(const c of row.getElementsByTagName('c')){
+      const col=(c.getAttribute('r')||'').replace(/\d+/g,''); if(!COLS.includes(col)||col.length!==1) continue;
+      const t=c.getAttribute('t'), v=c.getElementsByTagName('v')[0];
+      let val=null;
+      if(t==='s'&&v) val=ss[+v.textContent];
+      else if(t==='inlineStr') val=[...c.getElementsByTagName('t')].map(x=>x.textContent).join('');
+      else if(t==='str'||t==='e') val=v?v.textContent:null;
+      else if(t==='b') val=v?+v.textContent:null;
+      else if(v) val=+v.textContent;
+      if(typeof val==='string'){ val=val.trim(); if(val==='') val=null; }
+      o[col]=val;
+    }
+    rows.push(o);
+  }
+  return {rows,sheet:pick.name};
+}
+async function xlsxRows(buf){
+  const X=await xlsxOpen(buf);
+  const pick=X.sheets.find(s=>/^\s*medi[cç][aã]o\s+resumo\s*$/i.test(s.name))||X.sheets.find(s=>/resumo/i.test(s.name)&&!/consolid/i.test(s.name));
+  if(!pick) return null;
+  return xlsxSheet(X,pick,'ABCDGIK');
+}
+async function ceqFromXlsx(buf){
+  const X=await xlsxOpen(buf);
+  for(const sh of X.sheets){
+    const {rows}=await xlsxSheet(X,sh,'AC'); let val=null, mes=null;
+    for(const r of rows){ const a=typeof r.A==='string'?norm(r.A):'';
+      const mm=a.match(/medicao de equipamentos mes (\d{1,2}) (\d{4})/); if(mm&&!mes) mes={mm:+mm[1],yy:+mm[2]};
+      if(/^valor\s*liquido/.test(a)&&typeof r.C==='number'&&val==null) val=r2(r.C); }
+    if(val!=null) return {val,mes,sheet:sh.name};
+  }
+  return null;
+}
+function monthFromName(name){
+  const n=norm(name); const y=(n.match(/20\d\d/)||[])[0];
+  const i=MESES_FULL.findIndex(m=>n.includes(m)); return (i>=0&&y)?{yy:+y,mm:i+1}:null;
+}
+async function handle(file){
+  $('msg').textContent='Lendo '+file.name+'…'; $('fallback').hidden=true;
+  try{
+    const buf=await file.arrayBuffer(); const isPdf=/\.pdf$/i.test(file.name)||new Uint8Array(buf.slice(0,4)).join()==='37,80,68,70';
+    if(isPdf){
+      const lines=await pdfLines(buf);
+      const parsed=parsePdfLines(lines);
+      if(!parsed.items.length){
+        const o=nfFromLines(lines);
+        if(!lines.length||o.isNF){
+          nf={ctlTouched:nf.ctlTouched,fromText:!!(o.valor&&o.iss),liquido:o.liquido,medNum:o.medNum};
+          if(!lines.length){ ['nfNum','nfEmi'].forEach(id=>$(id).value=''); if(medInfo.totalReaj){ $('nfVal').value=brl(medInfo.totalReaj); const R=nfRegras(medInfo.totalReaj); $('nfIss').value=brl(R.iss); $('nfIrrf').value=brl(R.irrf);} }
+          nfFill(o);
+          $('nfSrc').textContent=lines.length?`Lido de ${file.name}${o.medNum?` · cita a medição ${o.medNum}`:''}${o.contrato?` do contrato ${o.contrato}`:''}.`
+            :`${file.name} é digitalizada (sem texto): digite nº e data de emissão. Valor, ISS e IRRF vieram da medição e da regra do contrato; confira com a nota.`;
+          $('msg').textContent=''; return;
+        }
+        throw new Error('Não encontrei itens de serviço nem dados de NFS-e nesse PDF.');
+      }
+      medInfo={totalReaj:parsed.totalReaj,reajuste:parsed.reajuste,medNum:parsed.medNum,src:file.name,valorP0:parsed.valorP0,saldo:parsed.saldo,acum:parsed.acum,database:parsed.database,contratual:parsed.contratual,totalObra:parsed.totalObra};
+      cmFill();
+      if(!nf.fromText&&parsed.totalReaj){ $('nfVal').value=brl(parsed.totalReaj); const R=nfRegras(parsed.totalReaj); $('nfIss').value=brl(R.iss); $('nfIrrf').value=brl(R.irrf); }
+      const m=matchPdf(parsed);
+      showResult(m,{source:(parsed.medNum?('Medição '+parsed.medNum+' · '):'')+file.name,kind:'pdf',period:parsed.period});
+    } else {
+      const xr=await xlsxRows(buf);
+      if(!xr){ const c=await ceqFromXlsx(buf);
+        if(!c) throw new Error('Essa planilha não tem a aba "Medição Resumo" nem a linha "VALOR. LIQUIDO" da medição de equipamentos.');
+        const mes=c.mes||monthFromName(file.name)||(()=>{const m=file.name.match(/(\d{2})[._-](20\d\d)/);return m?{mm:+m[1],yy:+m[2]}:null;})();
+        if(mes) $('ceqMes').value=mes.yy+'-'+mes.mm; $('ceqVal').value=brl(c.val); ceqUpdate();
+        $('ceqSrc').textContent=`Lido de ${file.name} (aba ${c.sheet}): valor líquido R$ ${brl(c.val)}${mes?` · competência ${String(mes.mm).padStart(2,'0')}/${mes.yy}`:' · confira a competência'}.`;
+        $('msg').textContent=''; return; }
+      const {rows}=xr; const m=matchXlsx(rows);
+      medInfo={totalReaj:null,reajuste:null,medNum:null,src:file.name,valorP0:m.total,saldo:null,acum:null,database:null,contratual:null};
+      cmFill();
+      if(!m.res.length) throw new Error('A aba "Medição Resumo" não tem os serviços no formato esperado (código, serviço, un, contrato, …, G líq. atual, I preço).');
+      showResult(m,{source:file.name,kind:'xlsx',fileMonth:monthFromName(file.name)});
+      if(!monthFromName(file.name)) $('msg').textContent='Não achei o mês no nome do arquivo: confira o mês da produção acima antes de colar.';
+      else $('msg').textContent='';
+      return;
+    }
+    $('msg').textContent='';
+  }catch(e){ $('msg').innerHTML=''; const s=document.createElement('span'); s.className='bad'; s.textContent=e.message||String(e); $('msg').append(s); }
+}
+async function handleAll(files){ const fs=[...files].sort((a,b)=>/nota|nf|nfs/i.test(a.name)-/nota|nf|nfs/i.test(b.name)); for(const f of fs) await handle(f); nfUpdate(); }
+$('file').addEventListener('change',e=>{handleAll(e.target.files); e.target.value='';});
+const drop=$('drop');
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>{handleAll(e.dataTransfer.files);});
+
+// estado inicial: exemplo com a medição 25 (ago/26)
+(function(){
+  const map=new Map(SAMPLE); const res=[];
+  for(const m of MED){ if(map.has(m.dro)) res.push({m,q:map.get(m.dro)}); }
+  showResult({res,unmatched:[],total:1778380.63},{source:'Exemplo: medição 25 (ago/26)',kind:'exemplo',period:{yy:2026,mm:8}});
+  cmFill(); $('ceqVal').value=brl(495162.85); ceqUpdate();
+  nf.liquido=1798596.67; nfFill({numero:'302',emissao:'15/09/2026',valor:1877449.55,iss:56323.49,irrf:22529.39,obra:'Rebouças'});
+})();
+</script>
+
+</body>
+</html>
