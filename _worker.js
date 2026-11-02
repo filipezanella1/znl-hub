@@ -264,6 +264,43 @@ export default {
       return json({ error: "Método não permitido." }, 405);
     }
 
+    if (path === "/api/proshot") {
+      // recria a foto da capa do Relatório Fotográfico com IA (OpenAI Images, edição). Chave só no Cloudflare.
+      if (!authed) return json({ error: "Faça login." }, 401);
+      if (request.method !== "POST") return json({ error: "Método não permitido." }, 405);
+      if (!env.OPENAI_API_KEY) return json({ error: "Falta configurar o secret OPENAI_API_KEY no projeto znl-hub do Cloudflare." }, 501);
+      const day = "proshot:" + new Date().toISOString().slice(0, 10);
+      const usados = env.HUB_KV ? Number(await env.HUB_KV.get(day)) || 0 : 0;
+      const LIMITE = Number(env.PROSHOT_LIMITE_DIA) || 20;
+      if (usados >= LIMITE) return json({ error: `Limite de ${LIMITE} imagens por dia atingido.` }, 429);
+      let body;
+      try { body = await request.json(); } catch { return json({ error: "JSON inválido." }, 400); }
+      const m = /^data:image\/(jpeg|png|webp);base64,(.+)$/.exec((body && body.image) || "");
+      if (!m || m[2].length > 12e6) return json({ error: "Imagem inválida ou grande demais." }, 400);
+      const bin = Uint8Array.from(atob(m[2]), c => c.charCodeAt(0));
+      const model = env.OPENAI_IMAGE_MODEL || "gpt-image-1";
+      const fd = new FormData();
+      fd.append("model", model);
+      fd.append("image", new Blob([bin], { type: "image/" + m[1] }), "foto." + (m[1] === "jpeg" ? "jpg" : m[1]));
+      fd.append("prompt", [
+        "Transforme esta foto de obra rodoviária numa fotografia profissional, como feita com câmera DSLR e lente de qualidade:",
+        "nitidez alta, exposição correta, faixa dinâmica ampla, céu com detalhe, cores naturais e vivas, sem aspecto artificial.",
+        "Preserve fielmente a cena: NÃO adicione, remova, mova ou altere máquinas, veículos, pessoas, placas, terreno, materiais, pavimento ou estágio da obra.",
+        "Mantenha exatamente o mesmo enquadramento, ponto de vista e composição. Sem texto, sem marca d'água."
+      ].join(" "));
+      fd.append("size", body.orient === "v" ? "1024x1536" : "1536x1024");
+      fd.append("quality", env.OPENAI_IMAGE_QUALITY || "high");
+      fd.append("output_format", "jpeg");
+      if (/^gpt-image-1/.test(model)) fd.append("input_fidelity", "high");
+      const r = await fetch("https://api.openai.com/v1/images/edits", { method: "POST", headers: { authorization: "Bearer " + env.OPENAI_API_KEY }, body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.data || !j.data[0] || !j.data[0].b64_json) {
+        return json({ error: "OpenAI: " + ((j.error && j.error.message) || ("erro " + r.status)) }, 502);
+      }
+      if (env.HUB_KV) await env.HUB_KV.put(day, String(usados + 1), { expirationTtl: 2 * 86400 });
+      return json({ image: "data:image/jpeg;base64," + j.data[0].b64_json, restantes: LIMITE - usados - 1 });
+    }
+
     // Páginas abertas sem senha (não usam dados do hub; tudo roda no navegador de quem acessa)
     const PUBLIC_PAGES = new Set(["/pdf-studio", "/pdf-studio.html", "/pdf-studio/"]);
     if (!authed && !PUBLIC_PAGES.has(path)) return Response.redirect(url.origin + "/login", 302);
