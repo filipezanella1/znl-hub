@@ -23,6 +23,8 @@ const DEFAULT_TOOLS = [
     desc: "Relatório fotográfico mensal da PR-990: fotos + descrições viram PPTX no padrão TCE, com avanço, linear e índice.", tag: "app", status: "on" },
   { id: "normas", name: "Normas Rodoviárias", url: "normas.html",
     desc: "Busca nas especificações de serviço, ensaios e manuais do DNIT, DER-PR, DER-SP, DER-MG e SINFRA-MT, com link direto para o PDF oficial.", tag: "consulta", status: "on" },
+  { id: "dwg-viewer", name: "DWG Viewer", url: "dwg-viewer.html",
+    desc: "Abre DWG/DXF no navegador: medidas com snap, handles, coordenadas, camadas e conversão para AutoCAD 2010/2013.", tag: "utilitário", status: "on" },
   { id: "claude", name: "Claude", url: "https://claude.ai/new",
     desc: "Abre uma conversa com o Claude. No terminal: claude <seu pedido>.", tag: "assistente", status: "on" }
 ];
@@ -307,7 +309,9 @@ export default {
 
     const res = await env.ASSETS.fetch(request);
     const out = new Response(res.body, res);
-    out.headers.set("cache-control", "no-store");
+    // bibliotecas pesadas do DWG Viewer (WASM ~17 MB): guardadas no navegador por 1 dia
+    if (path.startsWith("/dwg/lib/")) out.headers.set("cache-control", "private, max-age=86400, stale-while-revalidate=604800");
+    else out.headers.set("cache-control", "no-store");
     out.headers.set("x-robots-tag", "noindex");
     return out;
   }
