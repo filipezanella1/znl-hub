@@ -24,4 +24,11 @@ No projeto `znl-hub` do Cloudflare Pages são necessários (em Production e Prev
 - **Binding KV** `HUB_KV` → namespace `znl-hub-data`
 - **Secret** `HUB_PASSWORD` → a senha de acesso (definida só no painel do Cloudflare, nunca no código)
 
-Depois de mudar a senha, faça um novo deploy. Sair: `/logout` ou comando `logout` no terminal.
+Depois de mudar a senha, faça um novo deploy.
+
+### ProShot da capa (Relatório Fotográfico)
+
+Recria a foto da capa com IA (OpenAI Images). Opcional; sem a chave o resto do módulo funciona.
+
+- **Secret** `OPENAI_API_KEY` → chave da OpenAI (só no painel do Cloudflare)
+- Opcionais: `OPENAI_IMAGE_MODEL` (padrão `gpt-image-1`), `OPENAI_IMAGE_QUALITY` (padrão `high`), `PROSHOT_LIMITE_DIA` (padrão 20) Sair: `/logout` ou comando `logout` no terminal.
