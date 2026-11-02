@@ -905,7 +905,9 @@ async function pageVectorSvg(lib,page,p,fonts){
   svg.setAttribute('viewBox',`${fmtN(x)} ${fmtN(y)} ${fmtN(w)} ${fmtN(h)}`);
   svg.setAttribute('width',fmtN(w)+'pt'); svg.setAttribute('height',fmtN(h)+'pt');
   svg.removeAttribute('preserveAspectRatio');
-  return SVG_HEAD+new XMLSerializer().serializeToString(svg);
+  // tira o prefixo svg: (alguns programas de desenho não aceitam a raiz com prefixo)
+  const xml=new XMLSerializer().serializeToString(svg).replace(/<(\/?)svg:/g,'<$1').replace(/xmlns:svg=/,'xmlns=');
+  return SVG_HEAD+xml;
 }
 async function pageRasterSvg(page,p){
   const k=2, vp=page.getViewport({scale:k,rotation:(page.rotate+p.rot)%360});
