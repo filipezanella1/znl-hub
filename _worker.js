@@ -264,7 +264,9 @@ export default {
       return json({ error: "Método não permitido." }, 405);
     }
 
-    if (!authed) return Response.redirect(url.origin + "/login", 302);
+    // Páginas abertas sem senha (não usam dados do hub; tudo roda no navegador de quem acessa)
+    const PUBLIC_PAGES = new Set(["/pdf-studio", "/pdf-studio.html", "/pdf-studio/"]);
+    if (!authed && !PUBLIC_PAGES.has(path)) return Response.redirect(url.origin + "/login", 302);
 
     const res = await env.ASSETS.fetch(request);
     const out = new Response(res.body, res);

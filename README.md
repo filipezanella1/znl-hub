@@ -19,6 +19,7 @@ Site estático, sem build. No Cloudflare Pages: framework **None**, comando de b
 ## Senha e dados na nuvem
 
 O `_worker.js` protege todas as páginas com senha e guarda a lista de módulos no KV.
+Exceção: o **PDF Studio** (`/pdf-studio`) abre sem senha, para ter um link próprio; ele não lê nada do hub e processa os PDFs no navegador de quem usa. A lista fica em `PUBLIC_PAGES` no `_worker.js`.
 No projeto `znl-hub` do Cloudflare Pages são necessários (em Production e Preview):
 
 - **Binding KV** `HUB_KV` → namespace `znl-hub-data`
