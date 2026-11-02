@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Relatório Fotográfico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<script src="rf/vendor/pptxgen.bundle.js"></script>
+<script src="rf/gerador.js"></script>
+<style>
+/* Layout: console de uma coluna (padrão dos módulos do hub) — dados do relatório → fotos → descrições em lote → plano de slides → gerar */
+:root{
+  --bg:#0b0f0d; --panel:#111814; --line:#1f2b24; --fg:#cfe3d6; --dim:#7c9387;
+  --accent:#5fd38d; --accent-ink:#06120b; --warn:#e8b34b; --bad:#ef6b5b; --hl:#16241c;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --bg:#f3f6f4; --panel:#ffffff; --line:#d5ded8; --fg:#13241a; --dim:#5c7366;
+  --accent:#167a43; --accent-ink:#ffffff; --warn:#9a6a00; --bad:#b3261e; --hl:#e6f1ea; color-scheme:light } }
+:root[data-theme="light"]{
+  --bg:#f3f6f4; --panel:#ffffff; --line:#d5ded8; --fg:#13241a; --dim:#5c7366;
+  --accent:#167a43; --accent-ink:#ffffff; --warn:#9a6a00; --bad:#b3261e; --hl:#e6f1ea; color-scheme:light }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px}
+header{display:grid;gap:6px}
+.prompt{font:500 12px var(--mono);color:var(--dim);letter-spacing:.04em}
+.prompt b{color:var(--accent);font-weight:500}
+.prompt a{color:var(--dim)}
+h1{font:600 clamp(24px,4vw,34px)/1.1 var(--mono);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 span{color:var(--accent)}
+h2{margin:0;font:600 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.lead{color:var(--dim);max-width:70ch;margin:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+.fld{display:grid;gap:3px;font:500 11px var(--sans);text-transform:uppercase;letter-spacing:.06em;color:var(--dim);min-width:0}
+.fld input,.fld select,.fld textarea,.card input,.card select,.card textarea{font:500 13px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:7px 9px;width:100%;min-width:0;text-transform:none;letter-spacing:0}
+.fld textarea{min-height:110px;resize:vertical;line-height:1.5}
+.btn{font:600 13px var(--mono);border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);padding:9px 14px;border-radius:4px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.quiet{border-color:var(--line);color:var(--dim);background:transparent}
+.btn.quiet:hover:not(:disabled){color:var(--fg);border-color:var(--dim)}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:transparent}
+.btn.danger[data-arm]{background:var(--bad);color:var(--accent-ink)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn:focus-visible,.ib:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+input[type=file]{display:none}
+.drop{border:1px dashed var(--line);background:var(--panel);border-radius:6px;padding:22px;display:flex;flex-wrap:wrap;gap:14px 20px;align-items:center;justify-content:space-between;cursor:pointer}
+.drop.over{border-color:var(--accent);background:var(--hl)}
+.drop.busy{opacity:.6;pointer-events:none}
+.drop strong{font:600 15px var(--mono);display:block}
+.drop small{color:var(--dim)}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.cell{background:var(--panel);padding:12px 14px;display:grid;gap:4px;min-width:0}
+.lbl{font:500 11px var(--sans);text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.val{font:600 16px var(--mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.val small{font-weight:400;font-size:12px;color:var(--dim)}
+.ok{color:var(--accent)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 12px;align-items:center}
+.bar-r{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:grid;grid-template-columns:120px minmax(0,1fr);gap:10px;padding:10px;position:relative}
+.card.drag{opacity:.35}
+.card.mark{box-shadow:0 0 0 2px var(--accent)}
+.card .im{position:relative;border-radius:4px;overflow:hidden;background:var(--bg);aspect-ratio:1;cursor:grab}
+.card .im img{width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none;pointer-events:none}
+.card .n{position:absolute;left:5px;top:5px;font:600 12px var(--mono);background:rgba(6,18,11,.85);color:#5fd38d;padding:2px 6px;border-radius:3px}
+.card .star{position:absolute;right:5px;top:5px;font:600 11px var(--mono);background:#e8b34b;color:#1a1200;padding:2px 6px;border-radius:3px}
+.card .f{display:grid;gap:6px;min-width:0}
+.card .two{display:grid;grid-template-columns:1fr 70px;gap:6px}
+.card .three{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.card textarea{min-height:52px;resize:vertical;font-family:var(--sans);font-size:13.5px}
+.card .act{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.card .info{font:11px var(--mono);color:var(--dim);margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1 1 120px}
+.card .info em{font-style:normal;color:var(--warn)}
+.ib{font:600 12px var(--mono);border:1px solid var(--line);background:transparent;color:var(--dim);min-width:30px;height:30px;padding:0 8px;border-radius:4px;cursor:pointer}
+.ib:hover:not(:disabled){color:var(--fg);border-color:var(--dim)}
+.ib.on{border-color:var(--warn);color:var(--warn)}
+.ib.rm:hover{color:var(--bad);border-color:var(--bad)}
+.ib:disabled{opacity:.35;cursor:default}
+.chip{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.empty{margin:0;padding:18px 14px;color:var(--dim);font:13px var(--mono);border:1px dashed var(--line);border-radius:6px;text-align:center}
+.plan{list-style:none;margin:0;padding:0;display:grid;gap:4px;font:12.5px var(--mono);color:var(--dim)}
+.plan li b{color:var(--fg);font-weight:600}
+.msg{font:500 12.5px var(--mono);min-height:1.2em;color:var(--accent);margin:0;overflow-wrap:anywhere}
+.msg.err{color:var(--bad)} .msg.warn{color:var(--warn)}
+.prog{height:6px;background:var(--bg);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.prog span{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.hist{font:12px var(--mono);color:var(--dim);margin:0}
+.hint{margin:0;color:var(--dim);font-size:12.5px}
+code{font:12px var(--mono);color:var(--fg)}
+footer{color:var(--dim);font-size:12px;max-width:80ch}
+@media (max-width:520px){.card{grid-template-columns:90px minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="prompt"><a href="/">znl-hub</a> / <b>relatorio-fotografico</b></div>
+    <h1>Relatório <span>Fotográfico</span> PR-990</h1>
+    <p class="lead">Arraste as fotos do mês, escreva uma linha por foto e gere o PPTX no padrão TCE: capa, localização, avanço pelo retigráfico, linear com as fotos, fotos por disciplina e índice. Tudo é montado neste aparelho; as fotos não saem dele.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="h-dados">
+    <h2 id="h-dados">Dados do relatório</h2>
+    <div class="row">
+      <label class="fld" style="flex:0 0 120px">Nº<input id="num" type="number" min="1" step="1" value="1"></label>
+      <label class="fld" style="flex:0 0 190px">Mês de referência<input id="mes" type="month"></label>
+      <div class="fld" style="flex:1 1 260px">Retigráfico<span id="avInfo" class="val" style="font-size:13px">carregando…</span></div>
+    </div>
+    <p class="hist" id="hist"></p>
+  </section>
+
+  <label class="drop" id="drop" for="file">
+    <div><strong>Arraste as fotos aqui ou toque para escolher</strong><small>JPG/PNG. Se a foto tiver GPS e data (arquivo original do celular), estaca, lado e data entram sozinhos.</small></div>
+    <span class="btn ghost">Escolher fotos</span>
+    <input id="file" type="file" accept="image/*" multiple>
+  </label>
+
+  <div class="status" id="status" hidden>
+    <div class="cell"><span class="lbl">Fotos</span><span class="val" id="stN">0</span></div>
+    <div class="cell"><span class="lbl">Com descrição</span><span class="val" id="stD">0</span></div>
+    <div class="cell"><span class="lbl">Com estaca</span><span class="val" id="stE">0</span></div>
+    <div class="cell"><span class="lbl">Slides</span><span class="val" id="stS">0</span></div>
+  </div>
+
+  <section class="panel" id="lote" hidden aria-labelledby="h-lote">
+    <h2 id="h-lote">Descrições em lote</h2>
+    <p class="hint">Uma linha por foto, na ordem da lista ou com o nome do arquivo. Formato: <code>descrição | estaca lado</code> ou <code>IMG_4512.jpg | descrição | 412+10 LD</code>. A disciplina é sugerida pelas palavras da descrição (CBUQ, BGS → Pavimentação; bueiro, sarjeta → Drenagem; ponte, laje → OAE…).</p>
+    <label class="fld">Texto<textarea id="loteTxt" placeholder="Aterro em camadas no bordo da pista | 118+10 LD&#10;Escavação de corte em rocha alterada | 121 LE"></textarea></label>
+    <div class="row"><button class="btn ghost" id="loteAplicar" type="button">Aplicar às fotos</button><span class="msg" id="loteMsg"></span></div>
+  </section>
+
+  <section id="fotosSec" hidden>
+    <div class="bar" style="margin-bottom:10px">
+      <h2>Fotos <span style="text-transform:none;letter-spacing:0;color:var(--fg)" id="fotosCount"></span></h2>
+      <div class="bar-r">
+        <button class="btn quiet" id="ordenar" type="button">Ordenar por disciplina e estaca</button>
+        <button class="btn danger" id="limpar" type="button">Limpar tudo</button>
+      </div>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section class="panel" id="saida" hidden aria-labelledby="h-saida">
+    <h2 id="h-saida">Plano e geração</h2>
+    <ul class="plan" id="plan"></ul>
+    <div class="prog" id="prog" hidden><span></span></div>
+    <div class="row">
+      <button class="btn" id="gerar" type="button">Gerar PPTX</button>
+      <p class="msg" id="msg"></p>
+    </div>
+    <p class="hint">Para PDF: abra o PPTX no PowerPoint → Arquivo → Salvar como → PDF. Ao gerar, o número e o índice das fotos ficam registrados no hub para o próximo relatório.</p>
+  </section>
+
+  <footer>As fotos ficam salvas neste navegador até você limpar a lista, então dá para fechar e continuar depois. Mapa de localização e eixo: projeto da PR-990. Avanço: retigráfico publicado no app Obra completa PR990.</footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = s => document.querySelector(s);
+  const G = window.RFGerador;
+  const DISC = G.DISC, ORDEM = G.ORDEM;
+  const MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  let fotos = [];          // {id, nome, data, w, h, disc, desc, est, lado, dataFoto, capa, gps}
+  let AV = null, EIXO = null, LOGO = null, MAPA = null, HIST = null;
+
+  // ---------------- estaca
+  const estStr = G.estStr;
+  function parseEst(s) {
+    const m = String(s || "").replace(",", ".").match(/(\d+)(?:\s*\+\s*(\d+(?:\.\d+)?))?/);
+    if (!m) return null;
+    return Number(m[1]) + (m[2] ? Number(m[2]) / 20 : 0);
+  }
+  function parseLado(s) { const m = String(s || "").toUpperCase().match(/\b(LD|LE|EIXO)\b/); return m ? (m[1] === "EIXO" ? "eixo" : m[1]) : ""; }
+
+  // ---------------- disciplina por palavra-chave
+  const PALAVRAS = [
+    ["OAE", /\b(ponte|oae|laje|viga|longarina|transversina|pilar|encontro|estaca raiz|aparelho de apoio|cabeceira)\b/i],
+    ["Drenagem", /\b(bueiro|bstc|bdtc|galeria|dreno|drenos|sarjeta|valeta|descida|dissipador|caixa coletora|boca de lobo|meio[- ]fio|canaleta|drenagem|tubo|tubos|manta)\b/i],
+    ["Pavimentação", /\b(cbuq|bgs|sub[- ]?base|base|imprima\w*|pintura de liga\w*|refor[çc]o|regulariza\w*|revestimento|asfalt\w*|usina|pavimenta\w*|rr-?1c|cap\b)/i],
+    ["Sinalização", /\b(sinaliza\w*|placa|placas|faixa|tacha|tachas|defensa|defensas|pintura)\b/i],
+    ["Contenções", /\b(gabi[ãa]o|terramesh|muro|conten[çc][ãa]o)\b/i],
+    ["Obras complementares", /\b(cerca|enleiva\w*|hidrossemea\w*|grama|plantio|paisag\w*|acesso|ilumina\w*)\b/i],
+    ["Terraplenagem", /\b(corte|aterro|escava\w*|terraplen\w*|bota[- ]fora|compacta\w*|carga|transporte|rocha|desmonte|talude|limpeza|destocamento|solo)\b/i],
+  ];
+  const sugerirDisc = d => { for (const [k, re] of PALAVRAS) if (re.test(d || "")) return k; return null; };
+
+  // ---------------- UTM 22S e projeção no eixo (pontos a cada 5 m)
+  function llToUtm(lat, lon) {
+    const a = 6378137, f = 1 / 298.257222101, e2 = f * (2 - f), ep2 = e2 / (1 - e2), k0 = 0.9996, lon0 = -51 * Math.PI / 180;
+    const φ = lat * Math.PI / 180, λ = lon * Math.PI / 180;
+    const N = a / Math.sqrt(1 - e2 * Math.sin(φ) ** 2), T = Math.tan(φ) ** 2, C = ep2 * Math.cos(φ) ** 2, A = Math.cos(φ) * (λ - lon0);
+    const Mv = a * ((1 - e2 / 4 - 3 * e2 ** 2 / 64 - 5 * e2 ** 3 / 256) * φ - (3 * e2 / 8 + 3 * e2 ** 2 / 32 + 45 * e2 ** 3 / 1024) * Math.sin(2 * φ)
+      + (15 * e2 ** 2 / 256 + 45 * e2 ** 3 / 1024) * Math.sin(4 * φ) - (35 * e2 ** 3 / 3072) * Math.sin(6 * φ));
+    const E = 500000 + k0 * N * (A + (1 - T + C) * A ** 3 / 6 + (5 - 18 * T + T ** 2 + 72 * C - 58 * ep2) * A ** 5 / 120);
+    let Nn = k0 * (Mv + N * Math.tan(φ) * (A ** 2 / 2 + (5 - T + 9 * C + 4 * C ** 2) * A ** 4 / 24 + (61 - 58 * T + T ** 2 + 600 * C - 330 * ep2) * A ** 6 / 720));
+    if (lat < 0) Nn += 10000000;
+    return [E, Nn];
+  }
+  function projetar(lat, lon) {
+    if (!EIXO) return null;
+    const [E, N] = llToUtm(lat, lon), P = EIXO.pts, st = EIXO.step;
+    let best = null;
+    for (let i = 0; i < P.length - 1; i++) {
+      const [x1, y1] = P[i], [x2, y2] = P[i + 1], dx = x2 - x1, dy = y2 - y1, L2 = dx * dx + dy * dy;
+      const t = Math.max(0, Math.min(1, ((E - x1) * dx + (N - y1) * dy) / L2));
+      const px = x1 + t * dx, py = y1 + t * dy, d = Math.hypot(E - px, N - py);
+      if (!best || d < best.d) best = { d, est: (i + t) * st / 20, lado: (dx * (N - y1) - dy * (E - x1)) > 0 ? "LE" : "LD" };
+    }
+    return best;
+  }
+
+  // ---------------- EXIF mínimo (data e GPS) de JPEG
+  function lerExif(buf) {
+    const v = new DataView(buf);
+    if (v.getUint16(0) !== 0xFFD8) return {};
+    let o = 2;
+    while (o + 4 < v.byteLength) {
+      const mk = v.getUint16(o), len = v.getUint16(o + 2);
+      if (mk === 0xFFE1 && v.getUint32(o + 4) === 0x45786966) return tiff(v, o + 10);
+      if ((mk & 0xFF00) !== 0xFF00) break;
+      o += 2 + len;
+    }
+    return {};
+  }
+  function tiff(v, t) {
+    const le = v.getUint16(t) === 0x4949;
+    const u16 = p => v.getUint16(p, le), u32 = p => v.getUint32(p, le);
+    const ifd = p => { const n = u16(p), m = {}; for (let i = 0; i < n; i++) { const e = p + 2 + i * 12; m[u16(e)] = { type: u16(e + 2), count: u32(e + 4), off: e + 8 }; } return m; };
+    const val = en => {
+      if (!en) return null;
+      const sz = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8 }[en.type] || 1, p = sz * en.count > 4 ? t + u32(en.off) : en.off;
+      if (en.type === 2) { let s = ""; for (let i = 0; i < en.count - 1; i++) s += String.fromCharCode(v.getUint8(p + i)); return s; }
+      if (en.type === 5) { const r = []; for (let i = 0; i < en.count; i++) r.push(u32(p + i * 8) / (u32(p + i * 8 + 4) || 1)); return r; }
+      if (en.type === 3) return u16(p);
+      if (en.type === 4) return u32(p);
+      return v.getUint8(p);
+    };
+    const out = {};
+    try {
+      const i0 = ifd(t + u32(t + 4));
+      if (i0[0x8769]) { const ex = ifd(t + val(i0[0x8769])); const d = val(ex[0x9003]) || val(i0[0x0132]); if (d) out.data = d.slice(0, 10).replace(/:/g, "-"); }
+      if (i0[0x8825]) {
+        const g = ifd(t + val(i0[0x8825]));
+        const la = val(g[2]), lo = val(g[4]), lr = val(g[1]), lor = val(g[3]);
+        if (la && lo) {
+          let lat = la[0] + la[1] / 60 + la[2] / 3600, lon = lo[0] + lo[1] / 60 + lo[2] / 3600;
+          if (lr === "S") lat = -lat; if (lor === "W") lon = -lon;
+          if (lat && lon) out.gps = [lat, lon];
+        }
+      }
+    } catch (e) { /* EXIF incompleto: segue sem ele */ }
+    return out;
+  }
+
+  // ---------------- imagens
+  function carregarImg(src) { return new Promise((ok, err) => { const im = new Image(); im.onload = () => ok(im); im.onerror = err; im.src = src; }); }
+  async function reduzir(file) {
+    let bmp;
+    try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); }
+    catch { bmp = await carregarImg(URL.createObjectURL(file)); }
+    const max = 1800, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+    return { data: c.toDataURL("image/jpeg", 0.86), w, h };
+  }
+  async function crop(f, ar) {
+    const im = await carregarImg(f.data);
+    let w = im.naturalWidth, h = im.naturalHeight;
+    if (w / h > ar) w = Math.round(h * ar); else h = Math.round(w / ar);
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    c.getContext("2d").drawImage(im, (im.naturalWidth - w) / 2, (im.naturalHeight - h) / 2, w, h, 0, 0, w, h);
+    return c.toDataURL("image/jpeg", 0.85);
+  }
+  async function asDataURL(url) {
+    const b = await (await fetch(url)).blob();
+    return new Promise(ok => { const r = new FileReader(); r.onload = () => ok(r.result); r.readAsDataURL(b); });
+  }
+
+  // ---------------- rascunho no IndexedDB
+  const DB = { db: null };
+  function dbOpen() { return new Promise(ok => { try { const r = indexedDB.open("rf-pr990", 1); r.onupgradeneeded = () => r.result.createObjectStore("s"); r.onsuccess = () => { DB.db = r.result; ok(); }; r.onerror = () => ok(); } catch { ok(); } }); }
+  function dbPut(v) { try { if (DB.db) DB.db.transaction("s", "readwrite").objectStore("s").put(v, "rascunho"); } catch { } }
+  function dbGet() { return new Promise(ok => { try { if (!DB.db) return ok(null); const r = DB.db.transaction("s").objectStore("s").get("rascunho"); r.onsuccess = () => ok(r.result || null); r.onerror = () => ok(null); } catch { ok(null); } }); }
+  let saveT = 0;
+  const salvar = () => { clearTimeout(saveT); saveT = setTimeout(() => dbPut({ fotos, num: $("#num").value, mes: $("#mes").value }), 400); };
+
+  // ---------------- render
+  function render() {
+    const tem = fotos.length > 0;
+    $("#status").hidden = $("#lote").hidden = $("#fotosSec").hidden = $("#saida").hidden = !tem;
+    $("#fotosCount").textContent = tem ? `· ${fotos.length}` : "";
+    const g = $("#grid");
+    g.innerHTML = fotos.map((f, i) => {
+      const opts = ORDEM.map(d => `<option ${d === f.disc ? "selected" : ""}>${d}</option>`).join("");
+      const info = [f.nome, f.gps ? (f.gpsOff > 300 ? `<em>GPS a ${Math.round(f.gpsOff)} m do eixo</em>` : "GPS") : ""].filter(Boolean).join(" · ");
+      return `<article class="card" data-i="${i}">
+        <div class="im" draggable="true" title="Arraste para mudar a ordem"><img src="${f.data}" alt="Foto ${i + 1}"><span class="n">${i + 1}</span>${f.capa ? '<span class="star">capa</span>' : ""}</div>
+        <div class="f">
+          <select data-k="disc" aria-label="Disciplina da foto ${i + 1}" style="border-left:6px solid #${DISC[f.disc]}">${opts}</select>
+          <textarea data-k="desc" aria-label="Descrição da foto ${i + 1}" placeholder="Descrição (opcional)">${esc(f.desc)}</textarea>
+          <div class="three">
+            <input data-k="est" aria-label="Estaca da foto ${i + 1}" placeholder="Estaca 412+10" value="${esc(estStr(f.est))}">
+            <select data-k="lado" aria-label="Lado da foto ${i + 1}">${["", "LD", "LE", "eixo"].map(l => `<option value="${l}" ${l === (f.lado || "") ? "selected" : ""}>${l || "Lado"}</option>`).join("")}</select>
+          </div>
+          <input data-k="dataFoto" type="date" aria-label="Data da foto ${i + 1}" value="${esc(f.dataFoto || "")}">
+        </div>
+        <div class="act">
+          <span class="info" title="${esc(f.nome)}">${info}</span>
+          <button class="ib" data-a="up" ${i === 0 ? "disabled" : ""} aria-label="Subir">↑</button>
+          <button class="ib" data-a="down" ${i === fotos.length - 1 ? "disabled" : ""} aria-label="Descer">↓</button>
+          <button class="ib ${f.capa ? "on" : ""}" data-a="capa" title="Usar como foto da capa">capa</button>
+          <button class="ib rm" data-a="rm" aria-label="Remover foto ${i + 1}">✕</button>
+        </div></article>`;
+    }).join("");
+    resumo();
+  }
+  function resumo() {
+    const plano = G.planejar(fotos);
+    $("#stN").textContent = fotos.length;
+    $("#stD").textContent = fotos.filter(f => f.desc).length;
+    $("#stE").textContent = fotos.filter(f => f.est !== null && f.est !== undefined && isFinite(f.est)).length;
+    const nIdx = Math.max(1, Math.ceil(fotos.length / 9));
+    $("#stS").textContent = 4 + plano.length + nIdx;
+    const nomes = { um: "1 foto", dois: "2 fotos", retratos: "fotos em pé" };
+    let s = 5, foto = 1;
+    $("#plan").innerHTML = `<li><b>1–4</b> capa · localização · avanço físico · diagrama linear</li>` + plano.map(p => {
+      const a = foto, b = foto + p.idx.length - 1; foto = b + 1;
+      return `<li><b>${s++}</b> <span class="chip" style="background:#${DISC[p.disc]}"></span>${esc(p.disc)} · ${nomes[p.tipo]} · foto${a === b ? " " + a : "s " + a + "–" + b}</li>`;
+    }).join("") + `<li><b>${s}${nIdx > 1 ? "–" + (s + nIdx - 1) : ""}</b> índice das fotos</li>`;
+  }
+
+  // ---------------- eventos da lista
+  $("#grid").addEventListener("input", e => {
+    const card = e.target.closest(".card"); if (!card) return;
+    const f = fotos[+card.dataset.i], k = e.target.dataset.k;
+    if (k === "est") { f.est = e.target.value.trim() ? parseEst(e.target.value) : null; }
+    else if (k === "desc") {
+      f.desc = e.target.value;
+      if (!f.discManual) { const d = sugerirDisc(f.desc); if (d && d !== f.disc) { f.disc = d; const sel = card.querySelector('[data-k="disc"]'); sel.value = d; sel.style.borderLeftColor = "#" + DISC[d]; } }
+    }
+    else if (k === "disc") { f.disc = e.target.value; f.discManual = true; e.target.style.borderLeftColor = "#" + DISC[f.disc]; }
+    else f[k] = e.target.value;
+    resumo(); salvar();
+  });
+  $("#grid").addEventListener("change", e => { if (e.target.dataset.k === "lado") { fotos[+e.target.closest(".card").dataset.i].lado = e.target.value; salvar(); } });
+  $("#grid").addEventListener("click", e => {
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const i = +b.closest(".card").dataset.i, a = b.dataset.a;
+    if (a === "up" && i > 0) [fotos[i - 1], fotos[i]] = [fotos[i], fotos[i - 1]];
+    if (a === "down" && i < fotos.length - 1) [fotos[i + 1], fotos[i]] = [fotos[i], fotos[i + 1]];
+    if (a === "capa") { const on = !fotos[i].capa; fotos.forEach(f => f.capa = false); fotos[i].capa = on; }
+    if (a === "rm") fotos.splice(i, 1);
+    render(); salvar();
+  });
+  // arrastar para reordenar (computador)
+  let dragI = null;
+  $("#grid").addEventListener("dragstart", e => { const c = e.target.closest(".card"); if (!c) return; dragI = +c.dataset.i; c.classList.add("drag"); e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "rf"); });
+  $("#grid").addEventListener("dragover", e => { if (dragI === null) return; e.preventDefault(); document.querySelectorAll(".card.mark").forEach(x => x.classList.remove("mark")); const c = e.target.closest(".card"); if (c) c.classList.add("mark"); });
+  $("#grid").addEventListener("drop", e => {
+    if (dragI === null) return; e.preventDefault();
+    const c = e.target.closest(".card"); if (c) { const to = +c.dataset.i; const [m] = fotos.splice(dragI, 1); fotos.splice(to, 0, m); }
+    dragI = null; render(); salvar();
+  });
+  $("#grid").addEventListener("dragend", () => { dragI = null; document.querySelectorAll(".card.drag,.card.mark").forEach(x => x.classList.remove("drag", "mark")); });
+
+  $("#ordenar").addEventListener("click", () => {
+    const pos = new Map(fotos.map((f, i) => [f, i]));
+    fotos.sort((a, b) => (ORDEM.indexOf(a.disc) - ORDEM.indexOf(b.disc)) || ((a.est ?? 1e9) - (b.est ?? 1e9)) || (pos.get(a) - pos.get(b)));
+    render(); salvar();
+  });
+  $("#limpar").addEventListener("click", e => {
+    const b = e.currentTarget;
+    if (!b.dataset.arm) { b.dataset.arm = "1"; b.textContent = "Confirmar limpeza"; setTimeout(() => { delete b.dataset.arm; b.textContent = "Limpar tudo"; }, 3000); return; }
+    fotos = []; delete b.dataset.arm; b.textContent = "Limpar tudo"; render(); salvar();
+  });
+
+  // ---------------- importar fotos
+  async function adicionar(files) {
+    const list = [...files].filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|heic|webp)$/i.test(f.name));
+    if (!list.length) return;
+    const drop = $("#drop"); drop.classList.add("busy");
+    for (const file of list) {
+      try {
+        const ex = /jpe?g$/i.test(file.type) || /\.jpe?g$/i.test(file.name) ? lerExif(await file.slice(0, 256 * 1024).arrayBuffer()) : {};
+        const r = await reduzir(file);
+        const f = { id: Date.now() + Math.random(), nome: file.name, ...r, disc: "Geral", desc: "", est: null, lado: "", dataFoto: ex.data || "", capa: false };
+        if (ex.gps) { const p = projetar(ex.gps[0], ex.gps[1]); f.gps = ex.gps; if (p) { f.gpsOff = p.d; if (p.d <= 500) { f.est = Math.round(p.est * 20) / 20; f.lado = p.d < 6 ? "eixo" : p.lado; } } }
+        fotos.push(f);
+      } catch (err) { console.warn("Não foi possível ler", file.name, err); }
+    }
+    if (!fotos.some(f => f.capa) && fotos.length) fotos[0].capa = true;
+    drop.classList.remove("busy");
+    render(); salvar();
+  }
+  $("#file").addEventListener("change", e => { adicionar(e.target.files); e.target.value = ""; });
+  const drop = $("#drop");
+  ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { if (dragI !== null) return; e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove("over")));
+  drop.addEventListener("drop", e => { if (dragI !== null) return; e.preventDefault(); adicionar(e.dataTransfer.files); });
+
+  // ---------------- descrições em lote
+  $("#loteAplicar").addEventListener("click", () => {
+    const linhas = $("#loteTxt").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    let n = 0, ordem = 0;
+    for (const l of linhas) {
+      let partes = l.replace(/^\s*(foto\s*)?\d+\s*[:.)-]\s*/i, m => (ordem = parseInt(m.replace(/\D/g, ""), 10) - 1, "")).split("|").map(s => s.trim());
+      let alvo = null;
+      if (/\.(jpe?g|png|heic|webp)$/i.test(partes[0])) { alvo = fotos.find(f => f.nome.toLowerCase() === partes[0].toLowerCase()); partes = partes.slice(1); }
+      if (!alvo) alvo = fotos[ordem];
+      ordem++;
+      if (!alvo) continue;
+      const desc = (partes[0] || "").replace(/\*\s*destaque/i, "").trim();
+      if (desc) { alvo.desc = desc; const d = sugerirDisc(desc); if (d && !alvo.discManual) alvo.disc = d; }
+      if (/\*\s*destaque/i.test(l)) { fotos.forEach(f => f.capa = false); alvo.capa = true; }
+      if (partes[1]) { const e = parseEst(partes[1]); if (e !== null) alvo.est = e; const la = parseLado(partes[1]); if (la) alvo.lado = la; }
+      n++;
+    }
+    $("#loteMsg").textContent = n ? `${n} foto(s) atualizada(s).` : "Nenhuma linha reconhecida.";
+    render(); salvar();
+  });
+
+  // ---------------- gerar
+  function mesInfo() {
+    const v = $("#mes").value || new Date().toISOString().slice(0, 7);
+    const [y, m] = v.split("-").map(Number);
+    const nome = MESES[m - 1];
+    return { longo: nome[0].toUpperCase() + nome.slice(1) + " de " + y, curto: nome.slice(0, 3) + "/" + y, ym: v };
+  }
+  $("#gerar").addEventListener("click", async () => {
+    const msg = $("#msg"), btn = $("#gerar"), prog = $("#prog");
+    if (!fotos.length) return;
+    btn.disabled = true; msg.className = "msg"; msg.textContent = "Montando o relatório…"; prog.hidden = false;
+    const bar = prog.firstElementChild; bar.style.width = "15%";
+    try {
+      const num = String(Math.max(1, parseInt($("#num").value, 10) || 1)).padStart(3, "0");
+      const mi = mesInfo();
+      if (!LOGO) LOGO = await asDataURL("rf/logo.png");
+      if (!MAPA) MAPA = await asDataURL("rf/localizacao.png");
+      bar.style.width = "35%";
+      let feitos = 0; const total = fotos.length * 1.2 + 2;
+      const cropP = async (f, ar) => { const r = await crop(f, ar); feitos++; bar.style.width = Math.min(90, 35 + 55 * feitos / total) + "%"; return r; };
+      const pres = await G.gerar({ PptxGenJS: window.PptxGenJS, cfg: { num, mesLongo: mi.longo, mesCurto: mi.curto }, fotos, av: AV, logo: LOGO, mapa: MAPA, crop: cropP });
+      const nome = `RF-${num}_PR-990_${mi.longo.replace(/ de /, "-").replace(/\s+/g, "-")}.pptx`;
+      await pres.writeFile({ fileName: nome });
+      bar.style.width = "100%";
+      msg.textContent = `Pronto: ${nome} baixado.`;
+      await registrar(Number(num), mi);
+    } catch (err) {
+      console.error(err);
+      msg.className = "msg err"; msg.textContent = "Não foi possível gerar o PPTX: " + (err && err.message || err);
+    } finally { btn.disabled = false; setTimeout(() => { prog.hidden = true; bar.style.width = "0"; }, 1200); }
+  });
+
+  // ---------------- histórico no hub (KV)
+  async function carregarHist() {
+    try {
+      const r = await fetch("/api/rf", { credentials: "same-origin" });
+      if (!r.ok) throw 0;
+      HIST = await r.json();
+      const u = HIST.relatorios && HIST.relatorios[HIST.relatorios.length - 1];
+      if (u) {
+        $("#hist").textContent = `Último registrado: nº ${String(u.num).padStart(3, "0")} · ${u.mes} · ${u.fotos.length} fotos · gerado em ${new Date(u.em).toLocaleDateString("pt-BR")}`;
+        return u.num;
+      }
+      $("#hist").textContent = "Nenhum relatório registrado ainda.";
+    } catch { $("#hist").textContent = "Histórico do hub indisponível (o relatório é gerado normalmente)."; }
+    return 0;
+  }
+  async function registrar(num, mi) {
+    try {
+      const rel = { num, mes: mi.longo, ym: mi.ym, em: new Date().toISOString(),
+        fotos: fotos.map((f, i) => ({ n: i + 1, disc: f.disc, desc: (f.desc || "").slice(0, 300), est: f.est, lado: f.lado || "", data: f.dataFoto || "" })) };
+      const r = await fetch("/api/rf", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" }, body: JSON.stringify(rel) });
+      if (!r.ok) throw 0;
+      HIST = await r.json();
+      $("#hist").textContent = `Registrado no hub: nº ${String(num).padStart(3, "0")} · ${mi.longo} · ${fotos.length} fotos.`;
+    } catch { $("#hist").textContent = "O PPTX foi gerado, mas não deu para registrar no hub agora."; }
+  }
+
+  // ---------------- retigráfico: versão mestra publicada no app PR990, senão o que veio com o hub
+  async function carregarAv() {
+    const base = "https://filipezanella1.github.io/PR990-Obra-completa/data/";
+    let av = null, origem = "cópia do hub";
+    try { av = await (await fetch("rf/avanco.json")).json(); } catch { }
+    for (const [url, pega] of [[base + "mestre.json", j => j.retigrafico], [base + "avanco.json", j => j]]) {
+      try {
+        const r = await fetch(url, { cache: "no-store" }); if (!r.ok) continue;
+        const c = pega(await r.json());
+        if (c && c.frentes && (!av || (c.data || "") >= (av.data || ""))) { av = c; origem = "app PR990"; }
+      } catch { }
+    }
+    AV = av;
+    $("#avInfo").innerHTML = av ? `${av.data.split("-").reverse().join("/")} <small>(${origem})</small>` : '<span class="bad">não encontrado</span>';
+  }
+
+  // ---------------- início
+  (async () => {
+    const hoje = new Date(); hoje.setDate(1); hoje.setMonth(hoje.getMonth() - (new Date().getDate() < 15 ? 1 : 0));
+    $("#mes").value = hoje.toISOString().slice(0, 7);
+    $("#num").addEventListener("input", salvar); $("#mes").addEventListener("input", salvar);
+    await dbOpen();
+    const [ultimo, rasc] = await Promise.all([carregarHist(), dbGet(), carregarAv(),
+      fetch("rf/eixo.json").then(r => r.json()).then(j => { EIXO = j; }).catch(() => { })]);
+    $("#num").value = ultimo + 1;
+    if (rasc && Array.isArray(rasc.fotos) && rasc.fotos.length) {
+      fotos = rasc.fotos; if (rasc.num) $("#num").value = rasc.num; if (rasc.mes) $("#mes").value = rasc.mes;
+    }
+    render();
+  })();
+})();
+</script>
+</body>
+</html>

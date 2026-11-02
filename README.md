@@ -8,6 +8,8 @@ Central de acesso às ferramentas do Filipe, publicada no Cloudflare Pages.
 | `medicao-dro.html` | Medição → DRO PR-990: lê a medição do DER (PDF/xlsx), a NFS-e e a medição de equipamentos (CEQ) e gera o roteiro do mês para colar no DRO da obra 515 |
 | `_worker.js` | Porteiro do site: tela de senha e API `/api/tools` que guarda a lista de módulos no Cloudflare KV (igual em todos os aparelhos) |
 | `validacao-terceiros.html` | Validação de Terceiros: confere a parte diária dos basculantes terceiros (período 21 a 20) contra o Painel TCE, com alertas grave, médio e avaliar |
+| `relatorio-fotografico.html` | Relatório Fotográfico PR-990: fotos + descrições → PPTX no padrão TCE (capa, localização, avanço e linear pelo retigráfico do app PR990, fotos por disciplina, índice). Gera no navegador com PptxGenJS (`rf/vendor`), lê GPS/data das fotos e acha a estaca pelo eixo (`rf/eixo.json`). Histórico em `/api/rf` (KV) |
+| `rf/` | Arquivos do relatório: `gerador.js` (monta o PPTX; roda também no Node), logo, mapa de localização, eixo e cópia do retigráfico |
 | `pdf-studio.html` | PDF Studio: junta PDFs, organiza páginas (mover, trocar, remover, duplicar, girar), extrai páginas e divide um PDF em vários (ZIP). Processa tudo no navegador (PDF.js + pdf-lib + JSZip via cdnjs) |
 
 Site estático, sem build. No Cloudflare Pages: framework **None**, comando de build vazio, diretório de saída **/**.
