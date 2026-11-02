@@ -368,7 +368,8 @@ const pad=n=>String(n).padStart(2,'0');
 const nf=new Intl.NumberFormat('pt-BR',{maximumFractionDigits:1});
 const fmtSize=b=>b<1024?b+' B':b<1048576?Math.round(b/1024)+' KB':nf.format(b/1048576)+' MB';
 const collator=new Intl.Collator('pt-BR',{numeric:true,sensitivity:'base'});
-const frame=()=>new Promise(r=>requestAnimationFrame(()=>setTimeout(r,0)));
+// rAF para deixar a tela atualizar; setTimeout garante que segue mesmo com a aba em segundo plano
+const frame=()=>new Promise(r=>{ let done=false; const go=()=>{ if(!done){ done=true; setTimeout(r,0); } }; requestAnimationFrame(go); setTimeout(go,60); });
 const MODE_LABEL={add:'Ordem de adição',alpha:'Alfabética (A→Z)',custom:'Personalizada'};
 
 function pdfjs(){
@@ -487,7 +488,7 @@ async function renderThumb(d,src){
   const v=page.getViewport({scale:target/Math.max(v1.width,v1.height)});
   const c=document.createElement('canvas'); c.width=Math.max(1,Math.ceil(v.width)); c.height=Math.max(1,Math.ceil(v.height));
   const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
-  await page.render({canvasContext:ctx,viewport:v}).promise; page.cleanup();
+  await page.render({canvasContext:ctx,viewport:v,intent:'print'}).promise; page.cleanup();
   const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.82)); c.width=c.height=0;
   if(d.dead||!blob) throw new Error('removido');
   return URL.createObjectURL(blob);
@@ -957,7 +958,7 @@ async function renderLarge(d,src,cssW,canvas){
   canvas.width=Math.ceil(vpx.width); canvas.height=Math.ceil(vpx.height);
   canvas.style.width=vp.width+'px'; canvas.style.height=vp.height+'px';
   const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
-  await page.render({canvasContext:ctx,viewport:vpx}).promise; page.cleanup();
+  await page.render({canvasContext:ctx,viewport:vpx,intent:'print'}).promise; page.cleanup();
   return {vp,dpr};
 }
 
@@ -1473,7 +1474,7 @@ $('prevBtn').addEventListener('click',async()=>{
     prevTask=pdfjs().getDocument({data:bytes,isEvalSupported:false}); const pj=await prevTask.promise; const page=await pj.getPage(1);
     const v1=page.getViewport({scale:1}), sc=Math.min(260/v1.width,340/v1.height), dpr=Math.min(2,window.devicePixelRatio||1);
     const vp=page.getViewport({scale:sc*dpr}), cv=$('prevCanvas'); cv.width=vp.width; cv.height=vp.height; cv.style.width=vp.width/dpr+'px'; cv.style.height=vp.height/dpr+'px';
-    await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise; cv.hidden=false;
+    await page.render({canvasContext:cv.getContext('2d'),viewport:vp,intent:'print'}).promise; cv.hidden=false;
     say(`Prévia da página ${k} de ${flat.length} do arquivo final.`);
   }catch(e){ say('Não consegui gerar a prévia: '+(e&&e.message||e),'err'); }
 });
