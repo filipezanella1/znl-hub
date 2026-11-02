@@ -56,7 +56,7 @@ const WHITE7 = 0x1000000; // marcador da cor 7 (branco/preto conforme o fundo)
 class Scene {
   constructor() {
     this.co = [];          // coordenadas x,y (relativas à origem)
-    this.pS = []; this.pN = []; this.pE = []; this.pC = []; this.pL = []; this.pF = [];
+    this.pS = []; this.pN = []; this.pE = []; this.pC = []; this.pL = []; this.pF = []; this.pW = [];
     this.tx = [];          // textos
     this.snp = []; this.snK = []; this.snE = [];
     this.pts = [];         // pontos (POINT): x,y,c,l,e
@@ -84,7 +84,9 @@ function build(db, spaceHandle) {
   });
   const LI = new Map(layers.map((l, i) => [l.name, i]));
   const blocks = new Map();
-  for (const b of db.tables.BLOCK_RECORD.entries) blocks.set(b.name, b);
+  const blocksH = new Map();
+  for (const b of db.tables.BLOCK_RECORD.entries) { if (!blocks.has(b.name)) blocks.set(b.name, b); blocksH.set(b.handle, b); }
+  const blockOf = e => (e.blockHandle && blocksH.get(e.blockHandle)) || blocks.get(e.name);
   const layerIdx = name => { let i = LI.get(name); if (i === undefined) { i = layers.length; layers.push({ name, color: WHITE7, off: false, frozen: false, count: 0 }); LI.set(name, i); } return i; };
 
   // extensão para tesselação adaptativa
@@ -92,7 +94,7 @@ function build(db, spaceHandle) {
   const tol = isFinite(ext) && ext > 0 && ext < 1e9 ? ext / 20000 : 0.001;
 
   let O = null; // origem (definida pelo primeiro ponto; depois recentralizamos no main)
-  let curE = 0, curC = 0, curL = 0;
+  let curE = 0, curC = 0, curL = 0, curW = 0;
   let poly = null;
 
   const begin = () => { poly = S.co.length; };
@@ -103,7 +105,7 @@ function build(db, spaceHandle) {
   };
   const end = (flags = 0) => {
     const n = (S.co.length - poly) / 2;
-    if (n >= 2 || (flags & 4)) { S.pS.push(poly / 2); S.pN.push(n); S.pE.push(curE); S.pC.push(curC); S.pL.push(curL); S.pF.push(flags); }
+    if (n >= 2 || (flags & 4)) { S.pS.push(poly / 2); S.pN.push(n); S.pE.push(curE); S.pC.push(curC); S.pL.push(curL); S.pF.push(flags); S.pW.push(curW); }
     else S.co.length = poly;
   };
   const snap = (M, x, y, k) => {
@@ -197,11 +199,14 @@ function build(db, spaceHandle) {
         case 'LWPOLYLINE': case 'POLYLINE2D': {
           const v = e.vertices || []; if (!v.length) break;
           const closed = (e.flag & 1) || (e.flag & 512);
-          const W = e.type === 'LWPOLYLINE' ? Mo : Mo;
+          const W = Mo;
+          let wd = e.constantWidth || 0;
+          if (!wd) { let mx = Math.max(e.startWidth || 0, e.endWidth || 0); for (const q of v) mx = Math.max(mx, q.startWidth || 0, q.endWidth || 0); wd = mx; }
+          curW = wd * Math.hypot(M[0], M[1]);
           begin(); P(W, v[0].x, v[0].y);
           for (let i = 1; i < v.length; i++) bulgeSeg(W, v[i - 1].x, v[i - 1].y, v[i].x, v[i].y, v[i - 1].bulge || 0);
           if (closed && v.length > 2) bulgeSeg(W, v[v.length - 1].x, v[v.length - 1].y, v[0].x, v[0].y, v[v.length - 1].bulge || 0);
-          end(closed ? 1 : 0);
+          end(closed ? 1 : 0); curW = 0;
           for (let i = 0; i < v.length; i++) {
             snap(W, v[i].x, v[i].y, 1);
             const j = i + 1 < v.length ? i + 1 : (closed ? 0 : -1);
@@ -294,7 +299,7 @@ function build(db, spaceHandle) {
           break;
         }
         case 'INSERT': {
-          const b = blocks.get(e.name);
+          const b = blockOf(e);
           if (b && b.entities && depth < 12) {
             const bp = b.basePoint || { x: 0, y: 0 };
             const sx = e.xScale || 1, sy = e.yScale || 1, r = e.rotation || 0;
@@ -313,7 +318,7 @@ function build(db, spaceHandle) {
           break;
         }
         case 'DIMENSION': {
-          const b = blocks.get(e.name);
+          const b = blockOf(e);
           if (b && b.entities && depth < 12) for (const be of b.entities) drawEnt(be, M, curC === -1 ? layers[lay].color : curC, lay, depth + 1);
           else if (e.textPoint) addText(M, e.textPoint.x, e.textPoint.y, 2.5, 0, String(e.text || (e.measurement != null ? e.measurement.toFixed(2) : '')), 1, 2, 1, false);
           if (e.definitionPoint) snap(M, e.definitionPoint.x, e.definitionPoint.y, 4);
@@ -395,7 +400,7 @@ function build(db, spaceHandle) {
   };
 
   function hatch(e, M) {
-    const loops = [];
+    const loops = [], openLoops = [];
     for (const p of e.boundaryPaths || []) {
       const pts = []; const push = (x, y) => pts.push(x, y);
       if (p.vertices) {
@@ -415,9 +420,9 @@ function build(db, spaceHandle) {
         for (let i = 0; i < tmp.length; i += 2) push(tmp[i], tmp[i + 1]);
       } else {
         for (const ed of p.edges || []) {
-          if (ed.type === 1) { if (!pts.length) push(ed.start.x, ed.start.y); push(ed.end.x, ed.end.y); }
+          if (ed.type === 1) { const n = pts.length; if (!n || Math.abs(pts[n - 2] - ed.start.x) + Math.abs(pts[n - 1] - ed.start.y) > 1e-9) push(ed.start.x, ed.start.y); push(ed.end.x, ed.end.y); }
           else if (ed.type === 2) {
-            let a0 = ed.startAngle, a1 = ed.endAngle; const ccw = ed.isCCW !== false;
+            let a0 = ed.startAngle, a1 = ed.endAngle; const ccw = !(ed.isCCW === false || ed.isCCW === 0);
             if (!ccw) { a0 = -a0; a1 = -a1; }
             let sw = a1 - a0; if (ccw) { while (sw <= 0) sw += 2 * Math.PI; } else { while (sw >= 0) sw -= 2 * Math.PI; }
             if (Math.abs(Math.abs(ed.endAngle - ed.startAngle) - 2 * Math.PI) < 1e-9) sw = ccw ? 2 * Math.PI : -2 * Math.PI;
@@ -425,7 +430,7 @@ function build(db, spaceHandle) {
             for (let k = 0; k <= n; k++) { const an = a0 + sw * k / n; push(ed.center.x + ed.radius * Math.cos(an), ed.center.y + ed.radius * Math.sin(an)); }
           } else if (ed.type === 3) {
             const mj = ed.end, rx = Math.hypot(mj.x, mj.y), ry = rx * ed.lengthOfMinorAxis, rot = Math.atan2(mj.y, mj.x);
-            let a0 = ed.startAngle, a1 = ed.endAngle; const ccw = ed.isCCW !== false;
+            let a0 = ed.startAngle, a1 = ed.endAngle; const ccw = !(ed.isCCW === false || ed.isCCW === 0);
             if (!ccw) { a0 = -a0; a1 = -a1; }
             let sw = a1 - a0; if (ccw) { while (sw <= 0) sw += 2 * Math.PI; } else { while (sw >= 0) sw -= 2 * Math.PI; }
             const n = segsFor(rx, sw), cr = Math.cos(rot), sr = Math.sin(rot);
@@ -454,8 +459,9 @@ function build(db, spaceHandle) {
           }
         }
       }
-      if (pts.length >= 6) loops.push(pts);
+      if (pts.length >= 6) { if (p.boundaryPathTypeFlag & 32) openLoops.push(pts); else loops.push(pts); } // 32: contorno aberto (não entra no preenchimento)
     }
+    for (const L of openLoops) { begin(); for (let i = 0; i < L.length; i += 2) P(M, L[i], L[i + 1]); end(32); }
     if (!loops.length) return;
     const solid = e.solidFill === 1 || /^SOLID/i.test(e.patternName || '');
     // contornos
@@ -567,7 +573,7 @@ function pack(res) {
   const { S } = res;
   const f64 = a => new Float64Array(a), u32 = a => new Uint32Array(a);
   const g = {
-    co: f64(S.co), pS: u32(S.pS), pN: u32(S.pN), pE: u32(S.pE), pC: new Int32Array(S.pC), pL: u32(S.pL), pF: u32(S.pF),
+    co: f64(S.co), pS: u32(S.pS), pN: u32(S.pN), pE: u32(S.pE), pC: new Int32Array(S.pC), pL: u32(S.pL), pF: u32(S.pF), pW: f64(S.pW),
     snp: f64(S.snp), snK: new Uint8Array(S.snK), snE: u32(S.snE), pts: f64(S.pts), eB: f64(S.eB), eL: u32(S.eL)
   };
   const transfer = Object.values(g).map(a => a.buffer);

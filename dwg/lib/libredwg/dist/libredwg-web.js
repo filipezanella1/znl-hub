@@ -1931,10 +1931,12 @@ class LibreEntityConverter {
   convertInsert(entity, commonAttrs) {
     const libredwg = this.libredwg;
     let name = "";
+    let blockHandle = "";
     const block_header_ref = libredwg.dwg_dynapi_entity_data(entity, "block_header");
     if (block_header_ref) {
       const block_header_obj = libredwg.dwg_ref_get_object(block_header_ref);
       if (block_header_obj) {
+        try { const bh = libredwg.dwg_object_get_handle_object(block_header_obj); if (bh) blockHandle = idToString(bh.value); } catch (_) {}
         const block_header_tio = libredwg.dwg_object_to_object_tio(block_header_obj);
         if (block_header_tio) {
           name = libredwg.dwg_entity_block_header_get_block(block_header_tio).name;
@@ -1969,6 +1971,7 @@ class LibreEntityConverter {
       type: "INSERT",
       ...commonAttrs,
       name,
+      blockHandle,
       insertionPoint,
       xScale: scale ? scale.x : 1,
       yScale: scale ? scale.y : 1,
@@ -3372,6 +3375,8 @@ class LibreEntityConverter {
     const libredwg = this.libredwg;
     const version = libredwg.dwg_dynapi_entity_data(entity, "class_version");
     const name = libredwg.dwg_entity_get_block_name(entity, "block");
+    let blockHandle = "";
+    try { const r = libredwg.dwg_dynapi_entity_data(entity, "block"); const o = r && libredwg.dwg_ref_get_object(r); const bh = o && libredwg.dwg_object_get_handle_object(o); if (bh) blockHandle = idToString(bh.value); } catch (_) {}
     const definitionPoint = libredwg.dwg_dynapi_entity_data(entity, "def_pt");
     const textPoint = libredwg.dwg_dynapi_entity_data(entity, "text_midpt");
     const attachmentPoint = libredwg.dwg_dynapi_entity_data(entity, "attachmentPoint");
@@ -3385,6 +3390,7 @@ class LibreEntityConverter {
     const extrusionDirection = libredwg.dwg_dynapi_entity_data(entity, "extrusion");
     const styleName = libredwg.dwg_entity_get_dimstyle_name(entity);
     return {
+      blockHandle,
       type: "DIMENSION",
       version,
       name,
