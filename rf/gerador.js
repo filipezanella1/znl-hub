@@ -143,8 +143,7 @@
       const s = pres.addSlide({ masterName: "CAPA", sectionTitle: "Capa" });
       const ci = Math.max(0, fotos.findIndex(f => f.capa));
       if (fotos.length) s.addImage({ data: strip(await crop(fotos[ci], W / H, W, { capa: true })), x: 0, y: 0, w: W, h: H, altText: "Foto de destaque do mês" });
-      if (fotos[ci] && fotos[ci].usarIA && fotos[ci].ia)
-        s.addText("Foto de capa tratada por IA", { x: W - 3.1, y: H - 0.5, w: 2.8, h: 0.3, fontSize: 9, color: C.branco, align: "right", margin: [0, 0.1, 0, 0.1], fill: { color: C.tinta, transparency: 45 }, isTextBox: true });
+      if (fotos[ci] && fotos[ci].usarIA && fotos[ci].ia) s.addNotes("Foto de capa tratada por IA (ProShot).");
       s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 5.9, h: H, fill: { color: C.verdeEsc, transparency: 6 }, line: { type: "none" } });
       const L = 0.75, TW = 4.6;
       s.addShape(pres.shapes.RECTANGLE, { x: L, y: 0.7, w: 0.86, h: 1.22, fill: { color: C.branco }, line: { type: "none" } });
