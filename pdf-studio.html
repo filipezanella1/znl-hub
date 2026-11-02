@@ -97,6 +97,8 @@ input[type=file]{display:none}
 .pages{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:14px 16px;display:grid;gap:12px}
 .tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tools .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+.moveto{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--mono);color:var(--dim)}
+.moveto input{width:64px;font:600 12px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:5px 6px}
 .selinfo{font:500 12px var(--mono);color:var(--dim);margin-right:6px;font-variant-numeric:tabular-nums}
 .hint{margin:0;color:var(--dim);font-size:12.5px}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:10px}
@@ -133,7 +135,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
   <header>
     <div class="prompt"><a href="./" style="color:inherit;text-decoration:none" title="Voltar ao hub"><b>znl@hub</b></a>:~/pdf-studio$ merge</div>
     <h1>PDF <span>Studio</span></h1>
-    <p class="lead">Unir, organizar e reordenar arquivos PDF em uma única ferramenta. Importe os arquivos, escolha a ordem dos documentos, ajuste as páginas de cada um e gere um PDF só. Tudo é processado neste navegador; nenhum arquivo sai do seu computador.</p>
+    <p class="lead">Unir, organizar e reordenar arquivos PDF em uma única ferramenta. Importe os arquivos, escolha a ordem dos documentos, ajuste as páginas de cada um e gere um PDF só. Também serve para reorganizar um único PDF: importe só ele, mude as páginas e baixe. Tudo é processado neste navegador; nenhum arquivo sai do seu computador.</p>
   </header>
 
   <label class="drop" id="drop" for="file">
@@ -186,15 +188,17 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
       <span class="sep" aria-hidden="true"></span>
       <button class="btn ghost sm" type="button" data-op="rotl" data-need="sel" title="Girar 90° anti-horário">↺ 90°</button>
       <button class="btn ghost sm" type="button" data-op="rotr" data-need="sel" title="Girar 90° horário">↻ 90°</button>
+      <button class="btn ghost sm" type="button" data-op="swap" data-need="two" title="Selecione exatamente 2 páginas">Trocar as 2</button>
       <button class="btn ghost sm" type="button" data-op="dup" data-need="sel">Duplicar</button>
       <button class="btn ghost sm" type="button" data-op="start" data-need="sel">Para o início</button>
       <button class="btn ghost sm" type="button" data-op="end" data-need="sel">Para o final</button>
+      <span class="moveto"><label for="moveTo">Para a posição</label><input id="moveTo" type="number" min="1" inputmode="numeric" value="1"><button class="btn ghost sm" type="button" data-op="moveto" data-need="sel">Mover</button></span>
       <button class="btn danger sm" type="button" data-op="del" data-need="sel">Excluir</button>
       <span class="sep" aria-hidden="true"></span>
       <button class="btn quiet sm" type="button" data-op="undo" id="undoBtn">Desfazer</button>
       <button class="btn quiet sm" type="button" data-op="reset" id="resetBtn">Restaurar original</button>
     </div>
-    <p class="hint">Toque ou clique para selecionar (Shift seleciona um intervalo). Arraste para mudar a posição; com várias selecionadas, todas se movem juntas. Teclado: espaço seleciona, Alt+←/→ move, Delete exclui, Ctrl+Z desfaz.</p>
+    <p class="hint">Para trocar duas páginas de lugar (ex.: a 4 com a 5), selecione as duas e use <b>Trocar as 2</b>. Toque ou clique para selecionar (Shift seleciona um intervalo). Arraste para mudar a posição; com várias selecionadas, todas se movem juntas. Teclado: espaço seleciona, Alt+←/→ move, Delete exclui, Ctrl+Z desfaz.</p>
     <div class="pgrid" id="pgrid" role="listbox" aria-multiselectable="true" aria-label="Páginas do documento"></div>
   </section>
 
@@ -237,6 +241,7 @@ function pdflib(){
 
 // ---------- estado ----------
 const S={docs:[],seq:0,mode:'add',custom:[],customTouched:false,openId:null,sel:new Set(),lastUid:null,busy:false,lastUrl:null};
+let nameTouched=false;
 let uidN=0; const nuid=()=>'p'+(++uidN);
 const fresh=n=>Array.from({length:n},(_,i)=>({uid:nuid(),src:i,rot:0}));
 const byId=id=>S.docs.find(d=>d.id===id);
@@ -297,6 +302,7 @@ async function importFiles(list){
   if(added) say(`${added} documento(s) importado(s). Total: ${tot} documento(s).`+(rejected.length?` ${rejected.length} arquivo(s) recusado(s).`:''),rejected.length?'warn':'');
   else say(`Nenhum arquivo importado: ${rejected.length} recusado(s).`,'err');
   renderDocs();
+  if(added&&S.docs.length===1&&!S.openId) openPages(S.docs[0].id);
 }
 function showRejects(rows){
   if(!rows.length) return;
@@ -459,6 +465,8 @@ function updateSummary(){
   $('sSize').textContent=list.length?fmtSize(list.reduce((s,d)=>s+d.size,0)):'—';
   $('sMode').textContent=MODE_LABEL[S.mode];
   $('mergeBtn').disabled=S.busy||!pages;
+  $('mergeBtn').textContent=list.length===1?'Baixar PDF organizado':'Unir e baixar PDF';
+  if(!nameTouched) $('outName').value=list.length===1?list[0].name.replace(/\.pdf$/i,'')+'_organizado.pdf':'PDF_Unificado.pdf';
   $('clearAll').disabled=S.busy||!list.length;
 }
 function moveDocTo(id,insertAt){
@@ -527,6 +535,8 @@ function renderPages(keepFocus){
   const n=S.sel.size;
   $('selInfo').textContent=`${n} selecionada${n===1?'':'s'} · ${d.pages.length} de ${d.numPages} pág.`;
   document.querySelectorAll('.tools [data-need="sel"]').forEach(b=>b.disabled=!n);
+  document.querySelectorAll('.tools [data-need="two"]').forEach(b=>b.disabled=n!==2);
+  const mt=$('moveTo'); mt.max=Math.max(1,d.pages.length); if(+mt.value>d.pages.length) mt.value=Math.max(1,d.pages.length);
   $('undoBtn').disabled=!d.hist.length; $('resetBtn').disabled=!edited(d);
   if(keepFocus){ const el=pgrid.querySelector(`.pg[data-uid="${keepFocus}"]`); if(el) el.focus({preventScroll:false}); }
 }
@@ -547,6 +557,18 @@ function op(name){
     case 'dup': { let c=0; edit(d=>{ const out=[]; d.pages.forEach(p=>{ out.push(p); if(has(p)){ out.push({uid:nuid(),src:p.src,rot:p.rot}); c++; } }); d.pages=out; }); return say(`${c} página(s) duplicada(s).`); }
     case 'start': return edit(d=>{ d.pages=d.pages.filter(has).concat(d.pages.filter(p=>!has(p))); });
     case 'end': return edit(d=>{ d.pages=d.pages.filter(p=>!has(p)).concat(d.pages.filter(has)); });
+    case 'swap': {
+      if(S.sel.size!==2) return say('Selecione exatamente 2 páginas para trocar.','warn');
+      const [i,j]=d.pages.map((p,k)=>has(p)?k:-1).filter(k=>k>=0);
+      edit(d=>{ const a=d.pages.slice(); [a[i],a[j]]=[a[j],a[i]]; d.pages=a; });
+      return say(`Posições ${i+1} e ${j+1} trocadas.`);
+    }
+    case 'moveto': {
+      const n=parseInt($('moveTo').value,10);
+      if(!(n>=1&&n<=d.pages.length)) return say(`Informe uma posição entre 1 e ${d.pages.length}.`,'warn');
+      edit(d=>{ const sel=d.pages.filter(has), rest=d.pages.filter(p=>!has(p)); rest.splice(Math.min(n-1,rest.length),0,...sel); d.pages=rest; });
+      return say(`${S.sel.size} página(s) movida(s) para a posição ${n}.`);
+    }
     case 'del': { const c=S.sel.size; edit(d=>{ d.pages=d.pages.filter(p=>!has(p)); }); S.sel.clear(); renderPages(); return say(`${c} página(s) excluída(s) de "${d.name}". Desfazer volta atrás.`); }
     case 'undo': { if(!d.hist.length) return; d.pages=d.hist.pop(); const alive=new Set(d.pages.map(p=>p.uid)); [...S.sel].forEach(u=>{ if(!alive.has(u)) S.sel.delete(u); }); renderPages(); renderDocs(); return say('Alteração desfeita.'); }
     case 'reset': { edit(d=>{ d.pages=fresh(d.numPages); }); S.sel.clear(); renderPages(); return say(`Sequência original de "${d.name}" restaurada.`); }
@@ -626,6 +648,7 @@ $('mergeBtn').addEventListener('click',async()=>{
     progress(null); say('Falha ao gerar o PDF: '+(e&&e.message||e),'err');
   }finally{ setBusy(false); setTimeout(()=>{ if(!S.busy) $('prog').hidden=true; },1500); }
 });
+$('outName').addEventListener('input',()=>{ nameTouched=true; });
 $('outName').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!$('mergeBtn').disabled) $('mergeBtn').click(); });
 
 window.addEventListener('beforeunload',e=>{ if(S.docs.length){ e.preventDefault(); e.returnValue=''; } });
