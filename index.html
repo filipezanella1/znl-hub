@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
 <title>ZNL Hub</title>
+<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=VT323&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
@@ -44,6 +46,9 @@ a{color:inherit}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--phos);box-shadow:0 0 8px var(--phos);margin-right:6px;animation:pulse 2s infinite}
 @keyframes pulse{50%{opacity:.35}}
 .status .sp{flex:1}
+#sync.ok{color:var(--phos)} #sync.warn{color:var(--amber)} #sync.err{color:var(--red)}
+.logout{color:var(--amber);text-decoration:none;border:1px solid var(--amber);padding:0 8px}
+.logout:hover{background:var(--amber);color:var(--bg)}
 
 /* hero */
 .hero{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:flex-end;justify-content:space-between}
@@ -114,6 +119,8 @@ a{color:inherit}
 footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
+</head>
+<body>
 
 <canvas id="rain" aria-hidden="true"></canvas>
 <div class="wrap">
@@ -121,7 +128,9 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
     <span><span class="dot"></span><b>online</b></span>
     <span>host <b>znl-hub</b></span>
     <span>módulos <b id="count">0</b></span>
+    <span>dados <b id="sync">…</b></span>
     <span class="sp"></span>
+    <a id="logout" class="logout" href="/logout" hidden>sair</a>
     <span>brt <b id="clock">--:--:--</b></span>
     <span>uptime <b id="uptime">00:00</b></span>
   </div>
@@ -164,13 +173,13 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
     </section>
   </div>
 
-  <footer>Módulos que você registrar ficam salvos neste navegador. Use <b>export</b> no terminal para copiar a lista e fixá-la no código.</footer>
+  <footer>Os módulos ficam salvos na nuvem do hub e aparecem iguais em todos os aparelhos em que você entrar com a senha.</footer>
 </div>
 
 <script>
 (function(){
-  // ===== Ferramentas fixas: edite aqui para deixá-las permanentes =====
-  const BASE_TOOLS = [
+  // ===== Lista inicial (usada só quando a nuvem ainda está vazia) =====
+  const DEFAULTS = [
     { id:"painel-tce", name:"Painel TCE", url:"https://painel-tce.pages.dev",
       desc:"Painel de acompanhamento publicado no Cloudflare Pages.", tag:"dashboard", status:"on" },
     { id:"pr990", name:"Obra completa PR990", url:"https://filipezanella1.github.io/PR990-Obra-completa/",
@@ -183,16 +192,61 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
       desc:"Abre uma conversa com o Claude. No terminal: claude <seu pedido>.", tag:"assistente", status:"on" }
   ];
   const norm = u => String(u||"").replace(/\/+$/,"").toLowerCase();
-  const KEY = "znl.tools.v1";
-  const store = {
-    get(){ try{ return JSON.parse(localStorage.getItem(KEY)) || []; }catch(e){ return []; } },
-    set(v){ try{ localStorage.setItem(KEY, JSON.stringify(v)); }catch(e){} }
+  const OLD_KEY = "znl.tools.v1", CACHE = "znl.cache.v2";
+  const ls = {
+    get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+    set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+    del(k){ try{ localStorage.removeItem(k); }catch(e){} }
   };
-  let custom = store.get();
-  const all = () => BASE_TOOLS.map(t=>({...t,fixed:true}))
-    .concat(custom.filter(c=>!BASE_TOOLS.some(b=>norm(b.url)===norm(c.url))));
+  const merge = (base, extra) => base.concat((extra||[]).filter(o=>o&&o.url&&!base.some(t=>norm(t.url)===norm(o.url))));
+  let tools = ls.get(CACHE) || merge(DEFAULTS.slice(), ls.get(OLD_KEY));
+  let cloud = false;
+  const all = () => tools;
 
   const $ = s => document.querySelector(s);
+  function setSync(text, cls){ const el=$("#sync"); el.textContent=text; el.className=cls||""; }
+
+  // ===== nuvem: lê e grava a lista no servidor do hub =====
+  async function load(){
+    setSync("conectando…","warn");
+    try{
+      const r = await fetch("/api/tools",{credentials:"same-origin",cache:"no-store"});
+      if(r.status===401){ location.href="/login"; return; }
+      if(!r.ok || !(r.headers.get("content-type")||"").includes("json")) throw new Error(r.status);
+      const data = await r.json();
+      cloud = true; $("#logout").hidden = false;
+      tools = Array.isArray(data.tools) && data.tools.length ? data.tools : DEFAULTS.slice();
+      const old = ls.get(OLD_KEY) || [];
+      const merged = merge(tools, old);
+      if(merged.length > tools.length){
+        const n = merged.length - tools.length; tools = merged;
+        if(await save()) log(`+ ${n} módulo(s) que estavam só neste aparelho foram enviados para a nuvem.`,"ok");
+      }
+      ls.del(OLD_KEY); ls.set(CACHE, tools);
+      setSync("nuvem ✓","ok");
+      log(`${tools.length} módulo(s) sincronizado(s) com a nuvem.`,"dim");
+    }catch(e){
+      cloud = false; setSync("só local","warn");
+      log("! sem conexão com a nuvem do hub: mudanças ficam só neste navegador.","warn");
+    }
+    render();
+  }
+  async function save(){
+    ls.set(CACHE, tools);
+    if(!cloud) return true;
+    setSync("salvando…","warn");
+    try{
+      const r = await fetch("/api/tools",{method:"PUT",credentials:"same-origin",
+        headers:{"content-type":"application/json"},body:JSON.stringify({tools})});
+      if(r.status===401){ location.href="/login"; return false; }
+      if(!r.ok) throw new Error(r.status);
+      setSync("nuvem ✓","ok"); return true;
+    }catch(e){
+      setSync("erro ao salvar","err");
+      log("! não consegui salvar na nuvem. Confira a internet e use o comando sync.","err");
+      return false;
+    }
+  }
   const tilesEl = $("#tiles"), out = $("#out"), cmd = $("#cmd");
   const host = u => { try{ return new URL(u).host; }catch(e){ return u; } };
   const pad = n => String(n).padStart(2,"0");
@@ -210,11 +264,15 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
           <p class="t-desc">${esc(t.desc||"Sem descrição.")}</p>
           <div class="t-url">→ ${esc(host(t.url))}</div>
         </a>
-        ${t.fixed?"":`<button class="t-del" data-del="${i}" aria-label="Remover ${esc(t.name)}">rm</button>`}
+        <button class="t-del" data-del="${i}" aria-label="Remover ${esc(t.name)}">rm</button>
       </div>`).join("") +
       `<div class="tile-w"><button class="tile add" id="addTile" type="button"><div class="t-name">+ novo módulo</div><span class="t-url">registrar ferramenta</span></button></div>`;
     $("#addTile").onclick = openAdd;
-    tilesEl.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>removeAt(+b.dataset.del));
+    tilesEl.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+      if(b.dataset.arm){ removeAt(+b.dataset.del); return; }
+      b.dataset.arm="1"; b.textContent="remover?"; b.style.color="var(--red)"; b.style.borderColor="var(--red)";
+      setTimeout(()=>{ if(b.isConnected){ delete b.dataset.arm; b.textContent="rm"; b.style.color=""; b.style.borderColor=""; } },3000);
+    });
     tilesEl.querySelectorAll("a.tile").forEach(a=>a.addEventListener("click",()=>log(`> abrindo ${all()[+a.dataset.i].name}…`,"ok")));
   }
 
@@ -236,14 +294,14 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
   let pendingRm = -1;
   function removeAt(i){
     const t = all()[i]; if(!t) return;
-    if(t.fixed){ log(`! ${esc(t.name)} é fixo no código e não pode ser removido daqui.`,"warn"); return; }
-    custom = custom.filter(c=>c.id!==t.id); store.set(custom); render();
+    tools = tools.filter((_,j)=>j!==i); render(); save();
     log(`- módulo ${esc(t.name)} removido.`,"warn");
   }
   const HELP = [
     ["ls [filtro]","lista os módulos"],["open &lt;n|nome&gt;","abre uma ferramenta (atalho: só o número)"],
     ["add","registra um novo módulo"],["rm &lt;n&gt;","remove um módulo que você registrou"],
-    ["export","copia a lista em JSON para colar no código"],["matrix","liga/desliga a chuva de fundo"],
+    ["sync","recarrega a lista da nuvem"],["logout","sai do hub neste aparelho"],
+    ["export","copia a lista em JSON (backup)"],["matrix","liga/desliga a chuva de fundo"],
     ["claude &lt;pedido&gt;","abre uma conversa com o Claude já com o seu pedido"],
     ["whoami · date · clear","utilitários"]
   ];
@@ -267,17 +325,18 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
     add(){ openAdd(); log("> formulário de registro aberto acima.","dim"); },
     rm(arg){
       const i=find(arg); if(i<0) return log("! informe o número do módulo. Ex.: rm 2","err");
-      if(all()[i].fixed) return removeAt(i);
       if(pendingRm===i){ pendingRm=-1; return removeAt(i); }
       pendingRm=i; log(`? confirme repetindo: rm ${i+1}`,"warn");
     },
     export(){
-      const json = JSON.stringify(all().map(({fixed,...t})=>t),null,2);
-      const done=()=>log("+ lista copiada. Cole no lugar de BASE_TOOLS no código.","ok");
+      const json = JSON.stringify(all(),null,2);
+      const done=()=>log("+ lista copiada como backup.","ok");
       try{ navigator.clipboard.writeText(json).then(done,()=>log(esc(json),"dim")); }catch(e){ log(esc(json),"dim"); }
     },
     matrix(){ rainOn=!rainOn; log(`> chuva ${rainOn?"ligada":"desligada"}.`,"dim"); },
     claude(arg){ askClaude(arg); },
+    sync(){ load(); },
+    logout(){ if(cloud){ log("> encerrando sessão…","dim"); location.href="/logout"; } else log("! você não está conectado à nuvem do hub.","warn"); },
     whoami(){ log("filipe · operador do znl-hub","ok"); },
     date(){ log(new Date().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",dateStyle:"full",timeStyle:"medium"})); },
     clear(){ out.innerHTML=""; }
@@ -306,10 +365,10 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
     e.preventDefault();
     const name=$("#f-name").value.trim(); let url=$("#f-url").value.trim();
     if(!name) return $("#formErr").textContent="Dê um nome ao módulo.";
-    if(url && !/^https?:\/\//i.test(url)) url="https://"+url;
-    try{ new URL(url); }catch(_){ return $("#formErr").textContent="Endereço inválido. Ex.: https://meu-app.pages.dev"; }
-    custom.push({ id:"m"+Date.now(), name, url, desc:$("#f-desc").value.trim(), tag:$("#f-tag").value, status:$("#f-status").value });
-    store.set(custom); render(); e.target.reset(); panel.hidden=true;
+    if(url && !/^https?:\/\//i.test(url) && !/^[\w\-\/.]+\.html?$/i.test(url)) url="https://"+url;
+    try{ new URL(url, location.href); }catch(_){ return $("#formErr").textContent="Endereço inválido. Ex.: https://meu-app.pages.dev"; }
+    tools.push({ id:"m"+Date.now(), name, url, desc:$("#f-desc").value.trim(), tag:$("#f-tag").value, status:$("#f-status").value });
+    render(); save(); e.target.reset(); panel.hidden=true;
     log(`+ módulo <b>${esc(name)}</b> registrado como [${pad(all().length)}].`,"ok");
   });
 
@@ -357,12 +416,11 @@ footer{color:var(--dim);font-size:11px;letter-spacing:.06em}
 
   // ===== boot =====
   render();
-  [["ZNL-HUB v1.1 · sistema iniciado","ok"],
-   [`${all().length} módulo(s) carregado(s) · conexão segura`,"dim"],
+  [["ZNL-HUB v2.0 · sistema iniciado","ok"],
    ["digite <span class='ok'>help</span> para ver os comandos, ou <span class='ok'>claude &lt;pedido&gt;</span> para falar com o Claude.",""]]
    .forEach(([t,c])=>log(t,c));
+  load();
 })();
 </script>
-
 </body>
 </html>
