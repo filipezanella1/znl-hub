@@ -1,0 +1,2 @@
+dwg/lib/libredwg/  — @mlightcad/libredwg-web 0.8.3, baseado no GNU LibreDWG (GPL-3.0). https://github.com/mlightcad/libredwg-web
+dwg/lib/dwgconv*   — acadrust 0.6.8 (MPL-2.0), compilado para WebAssembly. Fonte do invólucro em dwg/conversor/. https://github.com/hakanaktt/acadrust
