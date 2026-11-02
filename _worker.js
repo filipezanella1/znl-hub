@@ -19,6 +19,8 @@ const DEFAULT_TOOLS = [
     desc: "Juntar, organizar, dividir, remover e extrair páginas de PDFs, tudo no navegador.", tag: "utilitário", status: "on" },
   { id: "validacao-terceiros", name: "Validação de Terceiros", url: "validacao-terceiros.html",
     desc: "Confere a parte diária dos basculantes terceiros (21 a 20) contra o Painel TCE e aponta alertas: grave, médio e avaliar.", tag: "app", status: "on" },
+  { id: "relatorio-fotografico", name: "Relatório Fotográfico", url: "relatorio-fotografico.html",
+    desc: "Relatório fotográfico mensal da PR-990: fotos + descrições viram PPTX no padrão TCE, com avanço, linear e índice.", tag: "app", status: "on" },
   { id: "claude", name: "Claude", url: "https://claude.ai/new",
     desc: "Abre uma conversa com o Claude. No terminal: claude <seu pedido>.", tag: "assistente", status: "on" }
 ];
@@ -211,6 +213,35 @@ export default {
         await env.HUB_KV.put("tools", JSON.stringify(list));
         await env.HUB_KV.put("seen_defaults", JSON.stringify(ALL_DEFAULT_IDS()));
         return json({ ok: true, count: list.length });
+      }
+      return json({ error: "Método não permitido." }, 405);
+    }
+
+    if (path === "/api/rf") {
+      // histórico do Relatório Fotográfico: número e índice das fotos de cada relatório (sem imagens)
+      if (!authed) return json({ error: "Faça login." }, 401);
+      if (!env.HUB_KV) return json({ error: "Armazenamento HUB_KV não configurado." }, 500);
+      const KEY = "rf:pr990";
+      const hist = (await env.HUB_KV.get(KEY, "json")) || { relatorios: [] };
+      if (request.method === "GET") return json(hist);
+      if (request.method === "POST") {
+        let r;
+        try { r = await request.json(); } catch { return json({ error: "JSON inválido." }, 400); }
+        const num = Number(r && r.num);
+        if (!Number.isInteger(num) || num < 1 || num > 9999 || !Array.isArray(r.fotos) || r.fotos.length > 500) return json({ error: "Relatório inválido." }, 400);
+        const s = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+        const rel = {
+          num, mes: s(r.mes, 40), ym: s(r.ym, 7), em: new Date().toISOString(),
+          fotos: r.fotos.map((f, i) => ({ n: i + 1, disc: s(f.disc, 40), desc: s(f.desc, 300),
+            est: Number.isFinite(f.est) ? f.est : null, lado: s(f.lado, 4), data: s(f.data, 10) })),
+          avanco: r.avanco && typeof r.avanco === "object" && r.avanco.pc && typeof r.avanco.pc === "object"
+            ? { data: s(r.avanco.data, 10), pc: Object.fromEntries(Object.entries(r.avanco.pc).slice(0, 30)
+                .filter(([, v]) => Number.isFinite(v)).map(([k, v]) => [String(k).slice(0, 60), v])) }
+            : null
+        };
+        hist.relatorios = hist.relatorios.filter(x => x.num !== num).concat(rel).sort((a, b) => a.num - b.num).slice(-60);
+        await env.HUB_KV.put(KEY, JSON.stringify(hist));
+        return json(hist);
       }
       return json({ error: "Método não permitido." }, 405);
     }
