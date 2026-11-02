@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 /* Layout: console de uma coluna (padrão dos módulos do hub) — importação → resumo → documentos em ordem → páginas do documento aberto → saída */
 :root{
@@ -97,6 +98,17 @@ input[type=file]{display:none}
 .pages{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:14px 16px;display:grid;gap:12px}
 .tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .tools .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+.frows{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:12px}
+.frow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font:500 12px var(--mono);color:var(--dim)}
+.frow>label:first-child,.frow>.flbl{flex:0 0 150px;color:var(--fg);font-weight:600}
+@media (max-width:520px){.frow>label:first-child,.frow>.flbl{flex-basis:100%}}
+.frow input:not([type=checkbox]){flex:1 1 200px;min-width:0;font:600 13px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
+.frow select{font:600 12px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 6px;max-width:100%}
+.frow .fnote{font-size:11px}
+.frow .fnote b{color:var(--fg);font-weight:600}
+label.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+.moveto{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--mono);color:var(--dim)}
+.moveto input{width:64px;font:600 12px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:5px 6px}
 .selinfo{font:500 12px var(--mono);color:var(--dim);margin-right:6px;font-variant-numeric:tabular-nums}
 .hint{margin:0;color:var(--dim);font-size:12.5px}
 .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(124px,1fr));gap:10px}
@@ -133,7 +145,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
   <header>
     <div class="prompt"><a href="./" style="color:inherit;text-decoration:none" title="Voltar ao hub"><b>znl@hub</b></a>:~/pdf-studio$ merge</div>
     <h1>PDF <span>Studio</span></h1>
-    <p class="lead">Unir, organizar e reordenar arquivos PDF em uma única ferramenta. Importe os arquivos, escolha a ordem dos documentos, ajuste as páginas de cada um e gere um PDF só. Tudo é processado neste navegador; nenhum arquivo sai do seu computador.</p>
+    <p class="lead">Unir, organizar e reordenar arquivos PDF em uma única ferramenta. Importe os arquivos, escolha a ordem dos documentos, ajuste as páginas de cada um e gere um PDF só. Também serve para um único PDF: reorganizar, remover páginas, extrair páginas ou dividir em vários arquivos. Tudo é processado neste navegador; nenhum arquivo sai do seu computador.</p>
   </header>
 
   <label class="drop" id="drop" for="file">
@@ -186,15 +198,46 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
       <span class="sep" aria-hidden="true"></span>
       <button class="btn ghost sm" type="button" data-op="rotl" data-need="sel" title="Girar 90° anti-horário">↺ 90°</button>
       <button class="btn ghost sm" type="button" data-op="rotr" data-need="sel" title="Girar 90° horário">↻ 90°</button>
+      <button class="btn ghost sm" type="button" data-op="swap" data-need="two" title="Inverte a ordem das páginas selecionadas entre si (com 2, troca uma pela outra)">Trocar entre si</button>
       <button class="btn ghost sm" type="button" data-op="dup" data-need="sel">Duplicar</button>
       <button class="btn ghost sm" type="button" data-op="start" data-need="sel">Para o início</button>
       <button class="btn ghost sm" type="button" data-op="end" data-need="sel">Para o final</button>
-      <button class="btn danger sm" type="button" data-op="del" data-need="sel">Excluir</button>
+      <span class="moveto"><label for="moveTo">Para a posição</label><input id="moveTo" type="number" min="1" inputmode="numeric" value="1"><button class="btn ghost sm" type="button" data-op="moveto" data-need="sel">Mover</button></span>
+      <button class="btn danger sm" type="button" data-op="del" data-need="sel">Remover</button>
       <span class="sep" aria-hidden="true"></span>
       <button class="btn quiet sm" type="button" data-op="undo" id="undoBtn">Desfazer</button>
       <button class="btn quiet sm" type="button" data-op="reset" id="resetBtn">Restaurar original</button>
     </div>
-    <p class="hint">Toque ou clique para selecionar (Shift seleciona um intervalo). Arraste para mudar a posição; com várias selecionadas, todas se movem juntas. Teclado: espaço seleciona, Alt+←/→ move, Delete exclui, Ctrl+Z desfaz.</p>
+    <div class="frows">
+      <div class="frow">
+        <label for="selSpec">Selecionar páginas</label>
+        <input id="selSpec" spellcheck="false" autocomplete="off" placeholder="ex.: 2, 5-7, 10">
+        <button class="btn ghost sm" type="button" data-op="selspec">Selecionar</button>
+        <span class="fnote">depois: <b>Remover</b>, <b>Extrair</b> ou qualquer ação acima</span>
+      </div>
+      <div class="frow">
+        <label for="newOrder">Nova ordem</label>
+        <input id="newOrder" spellcheck="false" autocomplete="off" placeholder="ex.: 5,4,7,6  ou  1-3,5,4,6-10">
+        <button class="btn ghost sm" type="button" data-op="reorder">Aplicar ordem</button>
+      </div>
+      <div class="frow">
+        <span class="flbl">Extrair páginas</span>
+        <label class="chk"><input type="checkbox" id="extractEach"> um PDF por página (ZIP)</label>
+        <button class="btn ghost sm" type="button" data-op="extract" data-need="sel">Extrair selecionadas e baixar</button>
+      </div>
+      <div class="frow">
+        <label for="splitMode">Dividir PDF</label>
+        <select id="splitMode">
+          <option value="ranges">por intervalos</option>
+          <option value="every">a cada N páginas</option>
+          <option value="each">uma página por arquivo</option>
+        </select>
+        <input id="splitVal" spellcheck="false" autocomplete="off" placeholder="ex.: 1-3, 4-8, 9-10">
+        <button class="btn ghost sm" type="button" data-op="split">Dividir e baixar</button>
+      </div>
+    </div>
+    <p class="msg" id="pgMsg" role="status" aria-live="polite"></p>
+    <p class="hint">Números são as posições atuais (o número em destaque em cada página). Extrair e dividir usam a ordem e as rotações que estão na tela e não mudam o documento. <b>Nova ordem</b> troca de lugar só as páginas citadas: <b>5,4,7,6</b> troca a 4 com a 5 e a 6 com a 7; <b>10-1</b> inverte tudo. Clique para selecionar (Shift seleciona um intervalo) e arraste para mover. Teclado: espaço seleciona, Alt+←/→ move, Delete remove, Ctrl+Z desfaz.</p>
     <div class="pgrid" id="pgrid" role="listbox" aria-multiselectable="true" aria-label="Páginas do documento"></div>
   </section>
 
@@ -237,6 +280,7 @@ function pdflib(){
 
 // ---------- estado ----------
 const S={docs:[],seq:0,mode:'add',custom:[],customTouched:false,openId:null,sel:new Set(),lastUid:null,busy:false,lastUrl:null};
+let nameTouched=false;
 let uidN=0; const nuid=()=>'p'+(++uidN);
 const fresh=n=>Array.from({length:n},(_,i)=>({uid:nuid(),src:i,rot:0}));
 const byId=id=>S.docs.find(d=>d.id===id);
@@ -251,6 +295,7 @@ function edited(d){ return d.pages.length!==d.numPages || d.pages.some((p,i)=>p.
 
 // ---------- mensagens ----------
 function say(text,kind,html){ const m=$('msg'); m.className='msg'+(kind?' '+kind:''); if(html) m.innerHTML=text; else m.textContent=text; }
+function sayPg(text,kind,html){ const m=$('pgMsg'); m.className='msg'+(kind?' '+kind:''); if(html) m.innerHTML=text; else m.textContent=text; }
 function progress(f,text){ $('prog').hidden=f==null; if(f!=null) $('progBar').style.width=Math.round(f*100)+'%'; if(text) say(text); }
 function setBusy(b){
   S.busy=b; $('drop').classList.toggle('busy',b); $('file').disabled=b;
@@ -297,6 +342,7 @@ async function importFiles(list){
   if(added) say(`${added} documento(s) importado(s). Total: ${tot} documento(s).`+(rejected.length?` ${rejected.length} arquivo(s) recusado(s).`:''),rejected.length?'warn':'');
   else say(`Nenhum arquivo importado: ${rejected.length} recusado(s).`,'err');
   renderDocs();
+  if(added&&S.docs.length===1&&!S.openId) openPages(S.docs[0].id);
 }
 function showRejects(rows){
   if(!rows.length) return;
@@ -459,6 +505,8 @@ function updateSummary(){
   $('sSize').textContent=list.length?fmtSize(list.reduce((s,d)=>s+d.size,0)):'—';
   $('sMode').textContent=MODE_LABEL[S.mode];
   $('mergeBtn').disabled=S.busy||!pages;
+  $('mergeBtn').textContent=list.length===1?'Baixar PDF organizado':'Unir e baixar PDF';
+  if(!nameTouched) $('outName').value=list.length===1?list[0].name.replace(/\.pdf$/i,'')+'_organizado.pdf':'PDF_Unificado.pdf';
   $('clearAll').disabled=S.busy||!list.length;
 }
 function moveDocTo(id,insertAt){
@@ -522,11 +570,13 @@ function renderPages(keepFocus){
       <span class="th"><img alt="" draggable="false" data-src="${p.src}" style="transform:rotate(${p.rot}deg)"><span class="ld">…</span></span>
       <span class="pl"><b>${i+1}</b><small>orig. p.${p.src+1}${dup?' · cópia':''}</small>${p.rot?`<em>↻${p.rot}°</em>`:''}</span>
     </div>`;
-  }).join('')||'<p class="empty" style="grid-column:1/-1">Todas as páginas foram excluídas. Use Desfazer ou Restaurar original.</p>';
+  }).join('')||'<p class="empty" style="grid-column:1/-1">Todas as páginas foram removidas. Use Desfazer ou Restaurar original.</p>';
   pgrid.querySelectorAll('img[data-src]').forEach(img=>{ if(!d.ready.has(+img.dataset.src)) io.observe(img); else fillImg(img,d,+img.dataset.src); });
   const n=S.sel.size;
   $('selInfo').textContent=`${n} selecionada${n===1?'':'s'} · ${d.pages.length} de ${d.numPages} pág.`;
-  document.querySelectorAll('.tools [data-need="sel"]').forEach(b=>b.disabled=!n);
+  document.querySelectorAll('#pagesSec [data-need="sel"]').forEach(b=>b.disabled=!n);
+  document.querySelectorAll('#pagesSec [data-need="two"]').forEach(b=>b.disabled=n<2);
+  const mt=$('moveTo'); mt.max=Math.max(1,d.pages.length); if(+mt.value>d.pages.length) mt.value=Math.max(1,d.pages.length);
   $('undoBtn').disabled=!d.hist.length; $('resetBtn').disabled=!edited(d);
   if(keepFocus){ const el=pgrid.querySelector(`.pg[data-uid="${keepFocus}"]`); if(el) el.focus({preventScroll:false}); }
 }
@@ -544,15 +594,67 @@ function op(name){
     case 'all': d.pages.forEach(p=>S.sel.add(p.uid)); return renderPages();
     case 'none': S.sel.clear(); return renderPages();
     case 'rotl': case 'rotr': { const k=name==='rotr'?90:270; return edit(d=>{ d.pages=d.pages.map(p=>has(p)?{...p,rot:(p.rot+k)%360}:p); }); }
-    case 'dup': { let c=0; edit(d=>{ const out=[]; d.pages.forEach(p=>{ out.push(p); if(has(p)){ out.push({uid:nuid(),src:p.src,rot:p.rot}); c++; } }); d.pages=out; }); return say(`${c} página(s) duplicada(s).`); }
+    case 'dup': { let c=0; edit(d=>{ const out=[]; d.pages.forEach(p=>{ out.push(p); if(has(p)){ out.push({uid:nuid(),src:p.src,rot:p.rot}); c++; } }); d.pages=out; }); return sayPg(`${c} página(s) duplicada(s).`); }
     case 'start': return edit(d=>{ d.pages=d.pages.filter(has).concat(d.pages.filter(p=>!has(p))); });
     case 'end': return edit(d=>{ d.pages=d.pages.filter(p=>!has(p)).concat(d.pages.filter(has)); });
-    case 'del': { const c=S.sel.size; edit(d=>{ d.pages=d.pages.filter(p=>!has(p)); }); S.sel.clear(); renderPages(); return say(`${c} página(s) excluída(s) de "${d.name}". Desfazer volta atrás.`); }
-    case 'undo': { if(!d.hist.length) return; d.pages=d.hist.pop(); const alive=new Set(d.pages.map(p=>p.uid)); [...S.sel].forEach(u=>{ if(!alive.has(u)) S.sel.delete(u); }); renderPages(); renderDocs(); return say('Alteração desfeita.'); }
-    case 'reset': { edit(d=>{ d.pages=fresh(d.numPages); }); S.sel.clear(); renderPages(); return say(`Sequência original de "${d.name}" restaurada.`); }
+    case 'swap': {
+      if(S.sel.size<2) return sayPg('Selecione pelo menos 2 páginas.','warn');
+      const slots=d.pages.map((p,k)=>has(p)?k:-1).filter(k=>k>=0);
+      edit(d=>{ const a=d.pages.slice(); slots.forEach((slot,k)=>{ a[slot]=d.pages[slots[slots.length-1-k]]; }); d.pages=a; });
+      return sayPg(slots.length===2?`Posições ${slots[0]+1} e ${slots[1]+1} trocadas.`:`Ordem invertida entre as posições ${slots.map(k=>k+1).join(', ')}.`);
+    }
+    case 'selspec': {
+      const r=parseRanges($('selSpec').value,d.pages.length);
+      if(r.err) return sayPg(r.err,'warn');
+      S.sel.clear(); r.groups.flat().forEach(i=>S.sel.add(d.pages[i].uid)); renderPages();
+      return sayPg(`${S.sel.size} página(s) selecionada(s).`);
+    }
+    case 'extract': return extractPages(d);
+    case 'split': return splitDoc(d);
+    case 'reorder': {
+      const r=parseOrder($('newOrder').value,d.pages.length);
+      if(r.err) return sayPg(r.err,'warn');
+      const slots=r.idx.slice().sort((a,b)=>a-b);
+      if(slots.every((s,k)=>s===r.idx[k])) return sayPg('Essa sequência já é a ordem atual.','warn');
+      edit(d=>{ const a=d.pages.slice(); slots.forEach((slot,k)=>{ a[slot]=d.pages[r.idx[k]]; }); d.pages=a; });
+      $('newOrder').value='';
+      return sayPg(`Nova ordem aplicada em ${r.idx.length} posições. As demais páginas não mudaram.`);
+    }
+    case 'moveto': {
+      const n=parseInt($('moveTo').value,10);
+      if(!(n>=1&&n<=d.pages.length)) return sayPg(`Informe uma posição entre 1 e ${d.pages.length}.`,'warn');
+      edit(d=>{ const sel=d.pages.filter(has), rest=d.pages.filter(p=>!has(p)); rest.splice(Math.min(n-1,rest.length),0,...sel); d.pages=rest; });
+      return sayPg(`${S.sel.size} página(s) movida(s) para a posição ${n}.`);
+    }
+    case 'del': { const c=S.sel.size; edit(d=>{ d.pages=d.pages.filter(p=>!has(p)); }); S.sel.clear(); renderPages(); return sayPg(`${c} página(s) removida(s) de "${d.name}". Desfazer volta atrás.`); }
+    case 'undo': { if(!d.hist.length) return; d.pages=d.hist.pop(); const alive=new Set(d.pages.map(p=>p.uid)); [...S.sel].forEach(u=>{ if(!alive.has(u)) S.sel.delete(u); }); renderPages(); renderDocs(); return sayPg('Alteração desfeita.'); }
+    case 'reset': { edit(d=>{ d.pages=fresh(d.numPages); }); S.sel.clear(); renderPages(); return sayPg(`Sequência original de "${d.name}" restaurada.`); }
   }
 }
-document.querySelectorAll('.tools [data-op]').forEach(b=>b.addEventListener('click',()=>op(b.dataset.op)));
+document.querySelectorAll('#pagesSec [data-op]').forEach(b=>b.addEventListener('click',()=>op(b.dataset.op)));
+// "2, 5-7, 10-8" → um grupo por item; índices 0-based das posições atuais
+function parseRanges(txt,n){
+  const toks=String(txt).trim().replace(/\s*[-–]\s*/g,'-').split(/[\s,;]+/).filter(Boolean);
+  if(!toks.length) return {err:'Digite as posições, ex.: 2, 5-7, 10.'};
+  const groups=[];
+  for(const t of toks){
+    const m=/^(\d+)(?:[-–](\d+))?$/.exec(t);
+    if(!m) return {err:`Não entendi "${t}". Use números separados por vírgula e intervalos com hífen (ex.: 6-10).`};
+    const a=+m[1], b=m[2]?+m[2]:a;
+    for(const v of [a,b]) if(v<1||v>n) return {err:`Posição ${v} não existe: o documento tem ${n} página(s).`};
+    const g=[]; const step=a<=b?1:-1; for(let v=a;v!==b+step;v+=step) g.push(v-1); groups.push(g);
+  }
+  return {groups};
+}
+// nova ordem: lista sem repetição, pelo menos 2 posições
+function parseOrder(txt,n){
+  if(!String(txt).trim()) return {err:'Digite a nova ordem, ex.: 5,4,7,6 ou 1-3,5,4,6-10.'};
+  const r=parseRanges(txt,n); if(r.err) return r;
+  const idx=r.groups.flat(); const seen=new Set();
+  for(const i of idx){ if(seen.has(i)) return {err:`A posição ${i+1} aparece mais de uma vez. Para repetir uma página, use Duplicar.`}; seen.add(i); }
+  if(idx.length<2) return {err:'Informe pelo menos 2 posições.'};
+  return {idx};
+}
 function toggleSel(uid,range){
   const d=cur(); const ids=d.pages.map(p=>p.uid);
   if(range&&S.lastUid&&ids.includes(S.lastUid)){
@@ -573,7 +675,13 @@ pgrid.addEventListener('keydown',e=>{
   else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){ const s=e.key==='ArrowLeft'?c.previousElementSibling:c.nextElementSibling; if(s&&s.classList.contains('pg')){ e.preventDefault(); s.focus(); } }
   else if(e.key==='Delete'||e.key==='Backspace'){ e.preventDefault(); if(!S.sel.size) S.sel.add(uid); op('del'); }
 });
-$('pagesSec').addEventListener('keydown',e=>{ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){ e.preventDefault(); op('undo'); } });
+$('newOrder').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); op('reorder'); } });
+$('selSpec').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); op('selspec'); } });
+$('splitVal').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); op('split'); } });
+function syncSplit(){ const m=$('splitMode').value; const v=$('splitVal');
+  v.hidden=m==='each'; v.placeholder=m==='every'?'N (ex.: 2)':'ex.: 1-3, 4-8, 9-10'; v.inputMode=m==='every'?'numeric':'text'; }
+$('splitMode').addEventListener('change',()=>{ $('splitVal').value=''; syncSplit(); }); syncSplit();
+$('pagesSec').addEventListener('keydown',e=>{ if(e.target.matches('input')) return; if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){ e.preventDefault(); op('undo'); } });
 sortable(pgrid,{item:'.pg',handle:'.grip',horizontal:true,onDrop:(it,from,ins)=>{
   const uid=it.dataset.uid; const block=S.sel.has(uid)&&S.sel.size>1;
   if(!block&&(ins===from||ins===from+1)) return;
@@ -588,6 +696,90 @@ function outName(){
   if(!/\.pdf$/i.test(n)) n+='.pdf';
   return n;
 }
+// ---------- montagem de PDFs (união, extração, divisão) ----------
+async function loadSrc(d){
+  try{ return await pdflib().PDFDocument.load(d.bytes,{updateMetadata:false}); }
+  catch(e){ throw new Error(`"${d.name}" não pôde ser lido (${e.message}).`); }
+}
+async function newPdf(title){
+  const out=await pdflib().PDFDocument.create();
+  out.setTitle(title); out.setCreator('ZNL Hub · PDF Studio'); out.setProducer('ZNL Hub · PDF Studio (pdf-lib)');
+  return out;
+}
+async function appendPages(out,src,pages){
+  const {degrees}=pdflib();
+  const copied=await out.copyPages(src,pages.map(p=>p.src));
+  copied.forEach((pg,k)=>{
+    const r=pages[k].rot;
+    if(r) pg.setRotation(degrees((((pg.getRotation().angle||0)+r)%360+360)%360));
+    out.addPage(pg);
+  });
+}
+function saveBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
+const baseName=d=>d.name.replace(/\.pdf$/i,'').replace(/[\\/:*?"<>|\u0000-\u001f]+/g,'_')||'documento';
+// parts: [{name, pages}] → baixa 1 PDF ou um ZIP com todos
+async function exportParts(d,parts,zipName,label){
+  if(S.busy) return;
+  if(parts.length>1&&!window.JSZip) return sayPg('Não consegui carregar o compactador (JSZip). Verifique a conexão e recarregue a página.','err');
+  setBusy(true);
+  try{
+    sayPg(`${label}: lendo "${d.name}"…`); await frame();
+    const src=await loadSrc(d); const files=[];
+    for(let i=0;i<parts.length;i++){
+      sayPg(`${label}: gerando ${i+1}/${parts.length}…`); if(i%5===0) await frame();
+      const out=await newPdf(parts[i].name.replace(/\.pdf$/i,''));
+      await appendPages(out,src,parts[i].pages);
+      files.push({name:parts[i].name,bytes:await out.save(),n:parts[i].pages.length});
+    }
+    if(files.length===1){
+      const blob=new Blob([files[0].bytes],{type:'application/pdf'}); saveBlob(blob,files[0].name);
+      sayPg(`Baixado: ${files[0].name} · ${files[0].n} página(s) · ${fmtSize(blob.size)}.`);
+    } else {
+      const zip=new JSZip(); files.forEach(f=>zip.file(f.name,f.bytes));
+      sayPg(`${label}: compactando ${files.length} arquivos…`); await frame();
+      const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'}); saveBlob(blob,zipName);
+      sayPg(`Baixado: ${zipName} · ${files.length} PDFs (${files.map(f=>f.n).join(' + ')} págs) · ${fmtSize(blob.size)}.`);
+    }
+  }catch(e){ sayPg(`Falha (${label.toLowerCase()}): `+(e&&e.message||e),'err'); }
+  finally{ setBusy(false); }
+}
+function extractPages(d){
+  const idx=d.pages.map((p,i)=>S.sel.has(p.uid)?i:-1).filter(i=>i>=0);
+  if(!idx.length) return sayPg('Selecione as páginas que quer extrair.','warn');
+  const b=baseName(d);
+  const parts=$('extractEach').checked
+    ? idx.map(i=>({name:`${b}_p${pad(i+1)}.pdf`,pages:[d.pages[i]]}))
+    : [{name:`${b}_paginas_${compact(idx)}.pdf`,pages:idx.map(i=>d.pages[i])}];
+  return exportParts(d,parts,`${b}_paginas.zip`,'Extrair');
+}
+// [0,1,2,4] → "1-3_5"
+function compact(idx){
+  const out=[]; let a=idx[0], p=idx[0];
+  for(const i of idx.slice(1).concat(null)){ if(i===p+1){ p=i; continue; } out.push(a===p?`${a+1}`:`${a+1}-${p+1}`); a=p=i; }
+  const s=out.join('_'); return s.length>40?`${idx.length}pags`:s;
+}
+function splitDoc(d){
+  const n=d.pages.length; if(!n) return sayPg('O documento está sem páginas.','warn');
+  const mode=$('splitMode').value; let groups;
+  if(mode==='each') groups=d.pages.map((_,i)=>[i]);
+  else if(mode==='every'){
+    const k=parseInt($('splitVal').value,10);
+    if(!(k>=1)) return sayPg('Informe de quantas em quantas páginas dividir (ex.: 2).','warn');
+    if(k>=n) return sayPg(`Com ${n} página(s), dividir a cada ${k} gera um arquivo só. Use um número menor.`,'warn');
+    groups=[]; for(let i=0;i<n;i+=k) groups.push(Array.from({length:Math.min(k,n-i)},(_,j)=>i+j));
+  } else {
+    const r=parseRanges($('splitVal').value,n); if(r.err) return sayPg(r.err,'warn');
+    groups=r.groups;
+  }
+  const b=baseName(d), w=String(groups.length).length<2?2:String(groups.length).length;
+  const parts=groups.map((g,k)=>({name:`${b}_parte${String(k+1).padStart(w,'0')}_p${g[0]+1}${g.length>1?'-'+(g[g.length-1]+1):''}.pdf`,pages:g.map(i=>d.pages[i])}));
+  return exportParts(d,parts,`${b}_dividido.zip`,'Dividir');
+}
+
 $('mergeBtn').addEventListener('click',async()=>{
   if(S.busy) return;
   const all=ordered(); const list=all.filter(d=>d.pages.length); const skipped=all.length-list.length;
@@ -596,25 +788,15 @@ $('mergeBtn').addEventListener('click',async()=>{
   const name=outName(); $('outName').value=name;
   setBusy(true); progress(0,'Validando documentos…');
   try{
-    const {PDFDocument,degrees}=pdflib();
-    const out=await PDFDocument.create();
+    const out=await newPdf(name.replace(/\.pdf$/i,''));
     const total=list.reduce((s,d)=>s+d.pages.length,0); let done=0;
     for(let i=0;i<list.length;i++){
       const d=list[i];
       progress(done/total*.95,`Unindo ${i+1}/${list.length}: ${d.name} (${d.pages.length} pág.)…`); await frame();
-      let src;
-      try{ src=await PDFDocument.load(d.bytes,{updateMetadata:false}); }
-      catch(e){ throw new Error(`"${d.name}" não pôde ser lido (${e.message}).`); }
-      const copied=await out.copyPages(src,d.pages.map(p=>p.src));
-      copied.forEach((pg,k)=>{
-        const r=d.pages[k].rot;
-        if(r) pg.setRotation(degrees((((pg.getRotation().angle||0)+r)%360+360)%360));
-        out.addPage(pg);
-      });
+      await appendPages(out,await loadSrc(d),d.pages);
       done+=d.pages.length;
     }
     progress(.97,'Gerando o arquivo…'); await frame();
-    out.setTitle(name.replace(/\.pdf$/i,'')); out.setCreator('ZNL Hub · PDF Studio'); out.setProducer('ZNL Hub · PDF Studio (pdf-lib)');
     const bytes=await out.save();
     const blob=new Blob([bytes],{type:'application/pdf'});
     if(S.lastUrl) URL.revokeObjectURL(S.lastUrl);
@@ -626,6 +808,7 @@ $('mergeBtn').addEventListener('click',async()=>{
     progress(null); say('Falha ao gerar o PDF: '+(e&&e.message||e),'err');
   }finally{ setBusy(false); setTimeout(()=>{ if(!S.busy) $('prog').hidden=true; },1500); }
 });
+$('outName').addEventListener('input',()=>{ nameTouched=true; });
 $('outName').addEventListener('keydown',e=>{ if(e.key==='Enter'&&!$('mergeBtn').disabled) $('mergeBtn').click(); });
 
 window.addEventListener('beforeunload',e=>{ if(S.docs.length){ e.preventDefault(); e.returnValue=''; } });
