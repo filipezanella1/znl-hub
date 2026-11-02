@@ -17,9 +17,16 @@ const DEFAULT_TOOLS = [
     desc: "Roteiro mensal do DRO da obra 515: lê medição do DER, NF e CEQ e gera tudo pronto para colar.", tag: "app", status: "on" },
   { id: "pdf-studio", name: "PDF Studio", url: "pdf-studio.html",
     desc: "Juntar, organizar, dividir, remover e extrair páginas de PDFs, tudo no navegador.", tag: "utilitário", status: "on" },
+  { id: "validacao-terceiros", name: "Validação de Terceiros", url: "validacao-terceiros.html",
+    desc: "Confere a parte diária dos basculantes terceiros (21 a 20) contra o Painel TCE e aponta alertas: grave, médio e avaliar.", tag: "app", status: "on" },
   { id: "claude", name: "Claude", url: "https://claude.ai/new",
     desc: "Abre uma conversa com o Claude. No terminal: claude <seu pedido>.", tag: "assistente", status: "on" }
 ];
+
+// Módulos padrão que já existiam antes deste controle (não são re-adicionados se você os removeu)
+const LEGACY_DEFAULT_IDS = ["painel-tce", "pr990", "medicao-dro", "pdf-studio", "claude"];
+const ALL_DEFAULT_IDS = () => DEFAULT_TOOLS.map(t => t.id);
+const normUrl = u => String(u || "").replace(/\/+$/, "").toLowerCase();
 
 const enc = new TextEncoder();
 
@@ -181,8 +188,20 @@ export default {
       if (!authed) return json({ error: "Faça login." }, 401);
       if (!env.HUB_KV) return json({ error: "Armazenamento HUB_KV não configurado." }, 500);
       if (request.method === "GET") {
-        const saved = await env.HUB_KV.get("tools", "json");
-        return json({ tools: Array.isArray(saved) ? saved : DEFAULT_TOOLS });
+        let saved = await env.HUB_KV.get("tools", "json");
+        if (!Array.isArray(saved)) return json({ tools: DEFAULT_TOOLS });
+        // acrescenta, uma única vez, módulos padrão novos que ainda não estão na lista salva
+        const seen = (await env.HUB_KV.get("seen_defaults", "json")) || LEGACY_DEFAULT_IDS;
+        const fresh = DEFAULT_TOOLS.filter(d => !seen.includes(d.id) &&
+          !saved.some(t => t.id === d.id || normUrl(t.url) === normUrl(d.url)));
+        if (fresh.length || seen.length !== ALL_DEFAULT_IDS().length) {
+          if (fresh.length) {
+            saved = saved.concat(fresh);
+            await env.HUB_KV.put("tools", JSON.stringify(saved));
+          }
+          await env.HUB_KV.put("seen_defaults", JSON.stringify(ALL_DEFAULT_IDS()));
+        }
+        return json({ tools: saved });
       }
       if (request.method === "PUT") {
         let body;
@@ -190,6 +209,7 @@ export default {
         const list = clean(body && body.tools);
         if (!list) return json({ error: "Lista de módulos inválida." }, 400);
         await env.HUB_KV.put("tools", JSON.stringify(list));
+        await env.HUB_KV.put("seen_defaults", JSON.stringify(ALL_DEFAULT_IDS()));
         return json({ ok: true, count: list.length });
       }
       return json({ error: "Método não permitido." }, 405);
