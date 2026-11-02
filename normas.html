@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Normas Rodoviárias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@400;500;600&display=swap">
+<style>
+/* Layout: console de uma coluna (padrão dos módulos do hub) — busca → filtros → resultados → fontes */
+:root{
+  --bg:#0b0f0d; --panel:#111814; --line:#1f2b24; --fg:#cfe3d6; --dim:#7c9387;
+  --accent:#5fd38d; --accent-ink:#06120b; --warn:#e8b34b; --bad:#ef6b5b; --hl:#16241c; --mark:#2a4a35;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]){
+  --bg:#f3f6f4; --panel:#ffffff; --line:#d5ded8; --fg:#13241a; --dim:#5c7366;
+  --accent:#167a43; --accent-ink:#ffffff; --warn:#9a6a00; --bad:#b3261e; --hl:#e6f1ea; --mark:#cfe8d8; color-scheme:light } }
+:root[data-theme="light"]{
+  --bg:#f3f6f4; --panel:#ffffff; --line:#d5ded8; --fg:#13241a; --dim:#5c7366;
+  --accent:#167a43; --accent-ink:#ffffff; --warn:#9a6a00; --bad:#b3261e; --hl:#e6f1ea; --mark:#cfe8d8; color-scheme:light }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans);margin:0}
+.wrap{max-width:1080px;margin:0 auto;padding-block:28px 56px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:18px}
+header{display:grid;gap:6px}
+.prompt{font:500 12px var(--mono);color:var(--dim);letter-spacing:.04em}
+.prompt b{color:var(--accent);font-weight:500}
+h1{font:600 clamp(24px,4vw,34px)/1.1 var(--mono);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 span{color:var(--accent)}
+.lead{color:var(--dim);max-width:70ch;margin:0}
+
+.search{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:4px 6px 4px 14px}
+.search:focus-within{border-color:var(--accent)}
+.search .ps{font:600 16px var(--mono);color:var(--accent);flex:none}
+.search input{flex:1;min-width:0;background:transparent;border:0;color:var(--fg);font:500 17px var(--mono);padding:12px 0;outline:none}
+.search input::placeholder{color:var(--dim);opacity:.8}
+.search kbd{font:500 11px var(--mono);color:var(--dim);border:1px solid var(--line);border-radius:3px;padding:1px 6px;flex:none}
+@media (max-width:600px){.search kbd{display:none}.search input{font-size:16px}}
+.ib{font:600 12px var(--mono);border:1px solid var(--line);background:transparent;color:var(--dim);min-width:30px;height:30px;padding:0 8px;border-radius:4px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;text-decoration:none;white-space:nowrap}
+.ib:hover{color:var(--fg);border-color:var(--dim)}
+.ib.pri{border-color:var(--accent);color:var(--accent)}
+.ib.pri:hover{background:var(--accent);color:var(--accent-ink)}
+.ib.on{color:var(--warn);border-color:var(--warn)}
+.ib:focus-visible,.chip:focus-visible,select:focus-visible,input:focus-visible,.more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ex{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:500 12px var(--mono);color:var(--dim)}
+.ex button{font:500 12px var(--mono);background:none;border:0;border-bottom:1px dashed var(--dim);color:var(--dim);padding:0;cursor:pointer}
+.ex button:hover{color:var(--accent);border-color:var(--accent)}
+
+.filters{display:grid;gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:600 12px var(--mono);border:1px solid var(--line);background:var(--panel);color:var(--dim);padding:6px 10px;border-radius:4px;cursor:pointer;display:inline-flex;gap:7px;align-items:baseline}
+.chip small{font-weight:400;font-variant-numeric:tabular-nums;opacity:.85}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chip.fav[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#1a1200}
+.frow{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font:500 12px var(--mono);color:var(--dim)}
+.frow select{font:600 12px var(--mono);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;max-width:100%}
+label.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
+label.chk input{accent-color:var(--accent)}
+.spacer{flex:1}
+
+.bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;align-items:baseline;border-bottom:1px solid var(--line);padding-bottom:8px}
+.bar h2{margin:0;font:600 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.bar h2 b{color:var(--fg);font-variant-numeric:tabular-nums}
+.bar .sub{font:500 12px var(--mono);color:var(--dim)}
+
+.list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.row{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:11px 14px;display:grid;gap:6px}
+.row.old{opacity:.72}
+.r1{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.org{font:600 11px var(--mono);letter-spacing:.04em;padding:1px 7px;border-radius:3px;border:1px solid currentColor;flex:none}
+.org.dnit{color:#6cb6ff}.org.derpr{color:var(--accent)}.org.dersp{color:#d6a2ff}.org.dermg{color:#ffb86b}.org.sinfra_mt{color:#7fd6d0}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .org.dnit{color:#1d5fa8} :root:not([data-theme="dark"]) .org.dersp{color:#7a3db8} :root:not([data-theme="dark"]) .org.dermg{color:#a65a00} :root:not([data-theme="dark"]) .org.sinfra_mt{color:#13756e} }
+.code{font:600 14px var(--mono);color:var(--fg);overflow-wrap:anywhere}
+.tit{font:500 15px/1.35 var(--sans);color:var(--fg);overflow-wrap:anywhere}
+.meta{display:flex;flex-wrap:wrap;gap:2px 12px;font:12px var(--mono);color:var(--dim)}
+.meta .s-anterior{color:var(--warn)} .meta .s-cancelada{color:var(--bad)}
+.acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
+.sim{border-top:1px dashed var(--line);margin-top:4px;padding-top:8px;display:grid;gap:6px}
+.sim h4{margin:0;font:600 11px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--dim)}
+.sim ul{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.sim li{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;font-size:13.5px}
+.sim li a{color:var(--fg)}
+.sim li a:hover{color:var(--accent)}
+.sim li small{font:11px var(--mono);color:var(--dim)}
+.empty{margin:0;padding:22px 14px;color:var(--dim);font:13px var(--mono);border:1px dashed var(--line);border-radius:6px;text-align:center}
+.more{justify-self:center;font:600 13px var(--mono);border:1px solid var(--accent);background:transparent;color:var(--accent);padding:9px 18px;border-radius:4px;cursor:pointer}
+.more:hover{background:var(--accent);color:var(--accent-ink)}
+
+.srcs{display:grid;gap:8px}
+.srcs h2{margin:0;font:600 13px var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.stab{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.stab a{background:var(--panel);padding:10px 12px;display:grid;gap:2px;text-decoration:none;color:var(--fg);min-width:0}
+.stab a:hover{background:var(--hl)}
+.stab b{font:600 13px var(--mono)}
+.stab span{font:12px var(--sans);color:var(--dim);overflow-wrap:anywhere}
+.stab em{font:normal 500 12px var(--mono);color:var(--accent);font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--accent);color:var(--accent-ink);font:600 12px var(--mono);padding:8px 14px;border-radius:4px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
+.toast.show{opacity:1}
+.err{border:1px solid var(--bad);border-radius:6px;padding:12px 14px;font:13px var(--mono);color:var(--bad)}
+footer{color:var(--dim);font-size:12.5px;max-width:86ch;display:grid;gap:6px}
+footer p{margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="prompt"><a href="./" style="color:inherit;text-decoration:none" title="Voltar ao hub"><b>znl@hub</b></a>:~/normas$ grep -ri</div>
+    <h1>Normas <span>Rodoviárias</span></h1>
+    <p class="lead">Busca única nas especificações de serviço, métodos de ensaio, manuais e projetos-padrão do DNIT, DER-PR e outros órgãos estaduais. Cada resultado abre o PDF direto no site oficial.</p>
+  </header>
+
+  <div class="search">
+    <span class="ps" aria-hidden="true">&gt;</span>
+    <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="CBUQ, sub-base, 031/2006, ES-PA 03, Marshall…" aria-label="Buscar normas">
+    <kbd>/</kbd>
+  </div>
+  <div class="ex" id="ex">tente:
+    <button>concreto asfáltico</button><button>BGS</button><button>TSD</button><button>micro revestimento</button><button>sarjeta</button><button>ensaio Marshall</button><button>DNIT 031</button><button>defensa metálica</button>
+  </div>
+
+  <div class="filters">
+    <div class="chips" id="orgs" role="group" aria-label="Órgão"></div>
+    <div class="frow">
+      <select id="tp" aria-label="Tipo de documento"></select>
+      <label class="chk"><input type="checkbox" id="old"> incluir revisões anteriores e canceladas</label>
+      <span class="spacer"></span>
+      <button class="chip fav" id="favf" aria-pressed="false">★ favoritas <small id="favn">0</small></button>
+    </div>
+  </div>
+
+  <div id="err" class="err" hidden></div>
+
+  <section aria-live="polite">
+    <div class="bar"><h2><b id="n">…</b> <span id="nl">documentos</span></h2><span class="sub" id="upd"></span></div>
+  </section>
+  <ul class="list" id="list"></ul>
+  <button class="more" id="more" hidden>mostrar mais</button>
+
+  <section class="srcs">
+    <h2>Fontes oficiais</h2>
+    <div class="stab" id="srcs"></div>
+  </section>
+
+  <footer>
+    <p>Os links apontam para os arquivos publicados pelos próprios órgãos; o catálogo é atualizado toda semana. Antes de usar em contrato, confira no site do órgão se a revisão é a vigente exigida no edital.</p>
+    <p>Outros estados (DAER-RS, DER-RJ, DER-ES, GOINFRA) foram verificados, mas não publicam um índice aberto de especificações; podem entrar quando passarem a publicar.</p>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const PAGE = 50;
+const TIPOS = {
+  ES:"Especificação de serviço", ME:"Método de ensaio", EM:"Especificação de material", PRO:"Procedimento / instrução de projeto",
+  MAN:"Manual", PAD:"Projeto-padrão", IT:"Instrução técnica / normativa", IE:"Instrução de ensaio", TER:"Terminologia",
+  CLA:"Classificação", NORMA:"Outros documentos"
+};
+// sinônimos e siglas de obra: digitar um deles também acha os outros
+const SYN = [
+  ["cbuq","cauq","concreto asfaltico","concreto betuminoso"],
+  ["bgs","brita graduada"],
+  ["bgtc","brita graduada tratada com cimento"],
+  ["tsd","tratamento superficial duplo"],["tss","tratamento superficial simples"],["tst","tratamento superficial triplo"],
+  ["pmf","pre-misturado a frio","pre misturado a frio"],["pmq","pre-misturado a quente","pre misturado a quente"],
+  ["mrf","microrrevestimento","micro revestimento","micro-revestimento"],["microrrevestimento","micro revestimento","micro-revestimento"],
+  ["imprimacao","imprimadura"],["pintura de ligacao","ligacao"],
+  ["oae","obra de arte especial","obras de arte especiais"],["oac","obra de arte corrente","obras de arte correntes","bueiro"],
+  ["cap","cimento asfaltico"],["emulsao","emulsoes"],["sami","camada intermediaria de alivio"],
+  ["sinalizacao horizontal","pintura de faixa","demarcacao viaria"],["defensa","guarda-corpo","barreira"],
+  ["cbr","indice de suporte california","isc"],["isc","indice de suporte california","cbr"],
+  ["marshall","estabilidade"],["regularizacao","reforco do subleito"],["meio-fio","meio fio","guia"],
+  ["sarjeta","valeta"],["dreno","drenagem profunda"],["solo-cimento","solo cimento"],["solo-cal","solo cal"],
+  ["bsc","base de solo cimento"],["ccp","concreto de cimento portland","pavimento rigido"]
+];
+const synMap = new Map();
+for (const g of SYN) for (const w of g) synMap.set(w, [...new Set([...(synMap.get(w) || []), ...g])]);
+
+const norm = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const compact = s => norm(s).replace(/[^a-z0-9]/g, "");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const STOP = new Set("de da do das dos e em para com por sem a o as os no na nos nas ao aos um uma ou que tipo especificacao servico servicos metodo ensaio norma dnit der material materiais rodoviarios rodoviaria rodoviario rodovias".split(" "));
+
+let DB = null, ALL = [], view = [], shown = 0;
+const st = { q:"", org:"", tp:"", old:false, fav:false };
+let favs = new Set(), favRemote = false;
+
+function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove("show"),1600); }
+
+/* ---------- favoritos: KV do hub (mesmo em todos os aparelhos), com cópia local de reserva ---------- */
+async function loadFavs(){
+  try { favs = new Set(JSON.parse(localStorage.getItem("znl-normas-fav") || "[]")); } catch {}
+  try {
+    const r = await fetch("/api/normas", { credentials:"same-origin" });
+    if (r.ok) { const j = await r.json(); if (Array.isArray(j.favs)) { favs = new Set(j.favs); favRemote = true; } }
+  } catch {}
+  $("#favn").textContent = favs.size;
+}
+async function saveFavs(){
+  const arr = [...favs];
+  try { localStorage.setItem("znl-normas-fav", JSON.stringify(arr)); } catch {}
+  $("#favn").textContent = favs.size;
+  try {
+    const r = await fetch("/api/normas", { method:"PUT", credentials:"same-origin", headers:{"content-type":"application/json"}, body: JSON.stringify({ favs: arr }) });
+    if (!r.ok && favRemote) toast("não sincronizou — ficou salvo só neste aparelho");
+  } catch { if (favRemote) toast("sem conexão — salvo só neste aparelho"); }
+}
+
+/* ---------- índice ---------- */
+function prep(it, i){
+  it.i = i;
+  it.hc = norm(it.c);
+  it.ht = norm(it.t);
+  it.hay = it.hc + " | " + it.ht + " | " + norm(it.cat) + " | " + norm(it.o);
+  it.cc = compact(it.c);
+  it.words = new Set(it.ht.split(/[^a-z0-9]+/).filter(w => w.length > 3 && !STOP.has(w)).map(w => w.replace(/(oes|aes|s)$/, "")));
+}
+
+function parseQuery(q){
+  q = norm(q).trim();
+  if (!q) return [];
+  const terms = [];
+  // frases conhecidas (ex.: "concreto asfaltico") viram um termo só, com seus sinônimos
+  for (const k of [...synMap.keys()].filter(k => k.includes(" ")).sort((a,b) => b.length - a.length)) {
+    if (q.includes(k)) { terms.push({ alts: synMap.get(k), raw: k }); q = q.replace(k, " "); }
+  }
+  for (const w of q.split(/\s+/).filter(Boolean)) {
+    const alts = synMap.get(w) || [w];
+    terms.push({ alts, raw: w, cmp: compact(w) });
+  }
+  const rx = s => new RegExp("(^|[^a-z0-9])" + s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  for (const t of terms) t.re = new Map(t.alts.map(a => [a, rx(a)]));
+  return terms;
+}
+
+function score(it, terms){
+  let s = 0;
+  for (const t of terms) {
+    let best = 0;
+    for (const a of t.alts) {
+      const p = it.hay.indexOf(a);
+      if (p < 0) continue;
+      // termos curtos (siglas, números) só valem no começo de palavra: "isc" não acha "disco"
+      if (a.length <= 4 && !t.re.get(a).test(it.hay)) continue;
+      let v = 4;
+      if (it.hc.includes(a)) v += 8;
+      if (it.ht.startsWith(a)) v += 4;
+      else if (t.re.get(a).test(it.ht)) v += 2;
+      best = Math.max(best, v);
+    }
+    if (!best && t.cmp && t.cmp.length >= 2 && it.cc.includes(t.cmp)) best = 10;
+    if (!best) return -1;
+    s += best;
+  }
+  if (terms.length) {
+    const qc = terms.map(t => t.cmp || "").join("");
+    if (qc.length >= 4 && it.cc.includes(qc)) s += 30;
+  }
+  if (it.s === "vigente") s += 3;
+  if (it.f === "derpr") s += 1.5;
+  if (it.a) s += Math.min(2, Math.max(0, (it.a - 2000) / 12));
+  return s;
+}
+
+function highlight(text, terms){
+  let h = esc(text);
+  if (!terms.length) return h;
+  const n = norm(text);
+  const marks = [];
+  for (const t of terms) for (const a of t.alts) {
+    if (a.length < 2) continue;
+    let p = n.indexOf(a);
+    while (p >= 0) { marks.push([p, p + a.length]); p = n.indexOf(a, p + a.length); }
+  }
+  if (!marks.length) return h;
+  marks.sort((x,y) => x[0]-y[0]);
+  const merged = [];
+  for (const m of marks) { const l = merged[merged.length-1]; if (l && m[0] <= l[1]) l[1] = Math.max(l[1], m[1]); else merged.push([...m]); }
+  let out = "", last = 0;
+  for (const [a,b] of merged) { out += esc(text.slice(last, a)) + "<mark>" + esc(text.slice(a, b)) + "</mark>"; last = b; }
+  return out + esc(text.slice(last));
+}
+
+/* ---------- filtros e lista ---------- */
+function base(){
+  return ALL.filter(it =>
+    (st.old || it.s === "vigente") &&
+    (!st.fav || favs.has(it.u)));
+}
+function run(){
+  const terms = parseQuery(st.q);
+  const pre = base();
+  let scored = terms.length
+    ? pre.map(it => [it, score(it, terms)]).filter(x => x[1] >= 0)
+    : pre.map(it => [it, 0]);
+  // contagens por órgão e tipo consideram os outros filtros
+  const byOrg = {}, byTp = {};
+  for (const [it] of scored) {
+    if (!st.tp || it.tp === st.tp) byOrg[it.f] = (byOrg[it.f] || 0) + 1;
+    if (!st.org || it.f === st.org) byTp[it.tp] = (byTp[it.tp] || 0) + 1;
+  }
+  scored = scored.filter(([it]) => (!st.org || it.f === st.org) && (!st.tp || it.tp === st.tp));
+  if (terms.length) scored.sort((a,b) => b[1]-a[1] || a[0].i - b[0].i);
+  view = scored.map(x => x[0]);
+  view.terms = terms;
+  renderFilters(byOrg, byTp, scored.length);
+  shown = 0; $("#list").innerHTML = ""; more();
+  $("#n").textContent = view.length.toLocaleString("pt-BR");
+  $("#nl").textContent = view.length === 1 ? "documento" : "documentos";
+  syncUrl();
+}
+
+function renderFilters(byOrg, byTp){
+  const tot = Object.values(byOrg).reduce((a,b)=>a+b,0);
+  const orgs = $("#orgs");
+  orgs.innerHTML = `<button class="chip" data-o="" aria-pressed="${!st.org}">Todos <small>${tot}</small></button>` +
+    DB.fontes.map(f => `<button class="chip" data-o="${f.id}" aria-pressed="${st.org===f.id}">${esc(f.sigla)} <small>${byOrg[f.id]||0}</small></button>`).join("");
+  const sel = $("#tp");
+  const tps = Object.keys(TIPOS).filter(k => ALL.some(i => i.tp === k));
+  const totT = Object.values(byTp).reduce((a,b)=>a+b,0);
+  sel.innerHTML = `<option value="">Todos os tipos (${totT})</option>` +
+    tps.map(k => `<option value="${k}"${st.tp===k?" selected":""}${byTp[k]?"":" disabled"}>${esc(TIPOS[k])} (${byTp[k]||0})</option>`).join("");
+}
+
+function rowHtml(it, terms){
+  const ext = (it.u.match(/\.(pdf|zip|rar|docx?|xlsx?|dwg)(\?|$)/i) || [,"link"])[1].toUpperCase();
+  const meta = [esc(TIPOS[it.tp] || it.cat)];
+  if (it.cat && norm(TIPOS[it.tp]) !== norm(it.cat) && it.tp !== "IT") meta.push(esc(it.cat));
+  if (it.a) meta.push(it.a);
+  if (it.rev) meta.push("rev. " + esc(it.rev));
+  if (it.s !== "vigente") meta.push(`<span class="s-${it.s}">${it.s === "anterior" ? "revisão anterior" : "cancelada"}</span>`);
+  const fav = favs.has(it.u);
+  return `<li class="row${it.s!=="vigente"?" old":""}" data-i="${it.i}">
+    <div class="r1"><span class="org ${it.f}">${esc(it.o)}</span>${it.c ? `<span class="code">${highlight(it.c, terms)}</span>` : ""}</div>
+    <div class="tit">${highlight(it.t || "(sem título)", terms)}</div>
+    <div class="meta">${meta.map(m => `<span>${m}</span>`).join("")}</div>
+    <div class="acts">
+      <a class="ib pri" href="${esc(it.u)}" target="_blank" rel="noopener">abrir ${ext}</a>
+      ${it.alt ? `<a class="ib" href="${esc(it.alt)}" target="_blank" rel="noopener">${(it.alt.match(/\.(\w+)(\?|$)/)||[,"alt"])[1].toUpperCase()}</a>` : ""}
+      ${it.pag ? `<a class="ib" href="${esc(it.pag)}" target="_blank" rel="noopener" title="Página da norma no site do órgão">página</a>` : ""}
+      <button class="ib" data-act="sim" title="Mesmo assunto em outros órgãos">≈ similares</button>
+      <button class="ib" data-act="cp" title="Copiar referência com link">copiar ref.</button>
+      <button class="ib${fav?" on":""}" data-act="fav" aria-pressed="${fav}" title="Favoritar">${fav?"★":"☆"}</button>
+    </div>
+  </li>`;
+}
+
+function more(){
+  const terms = view.terms || [];
+  const next = view.slice(shown, shown + PAGE);
+  $("#list").insertAdjacentHTML("beforeend", next.map(it => rowHtml(it, terms)).join(""));
+  shown += next.length;
+  $("#more").hidden = shown >= view.length;
+  $("#more").textContent = `mostrar mais (${(view.length - shown).toLocaleString("pt-BR")} restantes)`;
+  if (!view.length) {
+    let msg = st.fav && !favs.size ? "Nenhuma favorita ainda. Marque com ☆ nos resultados." : "Nada encontrado. Tente outro termo ou tire filtros.";
+    if (!st.old && view.terms && view.terms.length) {
+      const nOld = ALL.filter(it => it.s !== "vigente" && (!st.org || it.f === st.org) && (!st.tp || it.tp === st.tp) && (!st.fav || favs.has(it.u)) && score(it, view.terms) >= 0).length;
+      if (nOld) msg = `Nenhuma vigente. Há ${nOld} em revisões anteriores ou canceladas — <button class="ib pri" id="showOld">mostrar</button>`;
+    }
+    $("#list").innerHTML = `<li class="empty">${msg}</li>`;
+    const so = $("#showOld"); if (so) so.onclick = () => { $("#old").checked = st.old = true; run(); };
+  }
+}
+
+function similares(it){
+  const out = [];
+  if (!it.words.size) return out;
+  for (const o of ALL) {
+    if (o === it || o.f === it.f || o.s !== "vigente" || !o.words.size) continue;
+    let inter = 0; for (const w of it.words) if (o.words.has(w)) inter++;
+    if (!inter) continue;
+    const j = inter / (it.words.size + o.words.size - inter);
+    const sc = j + (o.tp === it.tp ? .12 : 0) + (o.s === "vigente" ? .03 : 0);
+    if (j >= .2) out.push([o, sc]);
+  }
+  return out.sort((a,b) => b[1]-a[1]).slice(0, 8).map(x => x[0]);
+}
+
+function refText(it){
+  return `${it.c ? it.c + " — " : ""}${it.t}. ${it.o}${it.a ? ", " + it.a : ""}. Disponível em: ${it.u}`;
+}
+
+$("#list").addEventListener("click", async e => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const li = b.closest(".row"); const it = ALL[+li.dataset.i];
+  if (b.dataset.act === "fav") {
+    favs.has(it.u) ? favs.delete(it.u) : favs.add(it.u);
+    const on = favs.has(it.u);
+    b.classList.toggle("on", on); b.textContent = on ? "★" : "☆"; b.setAttribute("aria-pressed", on);
+    toast(on ? "favoritada" : "removida das favoritas");
+    saveFavs();
+    if (st.fav && !on) run();
+  } else if (b.dataset.act === "cp") {
+    try { await navigator.clipboard.writeText(refText(it)); toast("referência copiada"); }
+    catch { prompt("Copie a referência:", refText(it)); }
+  } else if (b.dataset.act === "sim") {
+    const open = li.querySelector(".sim");
+    if (open) { open.remove(); return; }
+    const s = similares(it);
+    li.insertAdjacentHTML("beforeend", `<div class="sim"><h4>Mesmo assunto em outros órgãos</h4>${s.length ? "<ul>" + s.map(o =>
+      `<li><span class="org ${o.f}">${esc(o.o)}</span><a href="${esc(o.u)}" target="_blank" rel="noopener">${o.c ? `<b>${esc(o.c)}</b> · ` : ""}${esc(o.t)}</a><small>${esc(TIPOS[o.tp]||o.cat)}${o.a ? " · " + o.a : ""}${o.s!=="vigente" ? " · " + o.s : ""}</small></li>`).join("") + "</ul>" : `<p class="sub" style="margin:0;font:12px var(--mono);color:var(--dim)">Nenhuma equivalente encontrada pelo título.</p>`}</div>`);
+  }
+});
+
+/* ---------- estado na URL ---------- */
+function syncUrl(){
+  const p = new URLSearchParams();
+  if (st.q) p.set("q", st.q); if (st.org) p.set("o", st.org); if (st.tp) p.set("tp", st.tp);
+  if (st.old) p.set("ant", "1"); if (st.fav) p.set("fav", "1");
+  const s = p.toString(); history.replaceState(null, "", location.pathname + (s ? "?" + s : ""));
+}
+function readUrl(){
+  const p = new URLSearchParams(location.search);
+  st.q = p.get("q") || ""; st.org = p.get("o") || ""; st.tp = p.get("tp") || "";
+  st.old = p.get("ant") === "1"; st.fav = p.get("fav") === "1";
+  $("#q").value = st.q; $("#old").checked = st.old; $("#favf").setAttribute("aria-pressed", st.fav);
+}
+
+let deb;
+$("#q").addEventListener("input", e => { clearTimeout(deb); deb = setTimeout(() => { st.q = e.target.value; run(); }, 120); });
+$("#orgs").addEventListener("click", e => { const b = e.target.closest("[data-o]"); if (!b) return; st.org = b.dataset.o; run(); });
+$("#tp").addEventListener("change", e => { st.tp = e.target.value; run(); });
+$("#old").addEventListener("change", e => { st.old = e.target.checked; run(); });
+$("#favf").addEventListener("click", e => { st.fav = !st.fav; e.currentTarget.setAttribute("aria-pressed", st.fav); run(); });
+$("#more").addEventListener("click", more);
+$("#ex").addEventListener("click", e => { if (e.target.tagName !== "BUTTON") return; $("#q").value = st.q = e.target.textContent; run(); $("#q").focus(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && document.activeElement !== $("#q") && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); $("#q").select(); }
+  if (e.key === "Escape" && document.activeElement === $("#q") && $("#q").value) { $("#q").value = st.q = ""; run(); }
+});
+
+(async function init(){
+  readUrl();
+  try {
+    const [r] = await Promise.all([fetch("normas/catalogo.json", { credentials:"same-origin" }), loadFavs()]);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    DB = await r.json();
+  } catch (e) {
+    $("#err").hidden = false; $("#err").textContent = "Não consegui carregar o catálogo de normas (" + e.message + "). Recarregue a página.";
+    $("#n").textContent = "0"; return;
+  }
+  ALL = DB.itens; ALL.forEach(prep);
+  const d = new Date(DB.gerado_em);
+  $("#upd").textContent = "catálogo de " + d.toLocaleDateString("pt-BR") + (DB.avisos && DB.avisos.length ? " · " + DB.avisos.length + " fonte(s) com aviso na última coleta" : "");
+  if (DB.avisos && DB.avisos.length) $("#upd").title = DB.avisos.join("\n");
+  $("#srcs").innerHTML = DB.fontes.map(f => `<a href="${esc(f.url)}" target="_blank" rel="noopener"><b>${esc(f.sigla)}</b><span>${esc(f.nome)}</span><em>${f.n.toLocaleString("pt-BR")} docs${f.em ? " · " + f.em.split("-").reverse().join("/") : ""}</em></a>`).join("");
+  run();
+  if (!matchMedia("(pointer:coarse)").matches) $("#q").focus();
+})();
+</script>
+</body>
+</html>
