@@ -380,11 +380,13 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
     <div class="out" id="imgOpts" hidden>
       <div class="fform">
         <label>Modo<select id="imgMode"><option value="trace">vetorizar (traçar as formas)</option><option value="embed">imagem dentro do SVG (sem perda)</option></select></label>
-        <label data-im="trace">Detalhe<select id="imgPreset"><option value="logo">logotipo / ícone (8 cores)</option><option value="ilus" selected>ilustração (16 cores)</option><option value="foto">foto (32 cores, arquivo grande)</option></select></label>
+        <label data-im="trace">Detalhe<select id="imgPreset"><option value="logo">logotipo / ícone (8 cores)</option><option value="ilus" selected>ilustração (16 cores)</option><option value="foto">foto (32 cores, arquivo grande)</option><option value="pb">preto e branco (traço)</option></select></label>
+        <label data-im="trace" data-pb>Limiar do preto (%)<input id="imgThr" type="text" inputmode="decimal" autocomplete="off" value="50" title="Quanto maior, mais áreas escuras e cinzas viram preto"></label>
+        <label class="chk" data-im="trace" data-pb><input type="checkbox" id="imgInv"> inverter (branco no preto)</label>
         <label data-im="trace">Tamanho máx. para traçar (px)<input id="imgMax" type="text" inputmode="decimal" autocomplete="off" value="1200"></label>
         <label class="chk" data-im="trace"><input type="checkbox" id="imgBg"> tirar fundo branco</label>
       </div>
-      <p class="hint" id="imgHint">Vetorizar transforma a imagem em formas editáveis, que ficam nítidas em qualquer tamanho; funciona melhor com logotipos, desenhos e plantas. Fotos ficam com aparência de pintura e geram arquivos grandes; para fotos, prefira "imagem dentro do SVG".</p>
+      <p class="hint" id="imgHint">Vetorizar transforma a imagem em formas editáveis, que ficam nítidas em qualquer tamanho; funciona melhor com logotipos, desenhos e plantas. Fotos ficam com aparência de pintura e geram arquivos grandes; para fotos, prefira "imagem dentro do SVG". Em preto e branco, marque "tirar fundo branco" para ficar só o traço preto.</p>
       <div class="out-row"><button class="btn" type="button" id="imgGo">Converter e baixar SVG</button></div>
       <div class="prog" id="imgProg" hidden><span id="imgProgBar"></span></div>
       <p class="msg" id="imgMsg" role="status" aria-live="polite"></p>
@@ -1616,8 +1618,8 @@ function renderImgs(){
     </li>`).join('');
   syncImgOpts();
 }
-function syncImgOpts(){ const t=$('imgMode').value; document.querySelectorAll('#imgOpts [data-im]').forEach(el=>el.hidden=el.dataset.im!==t); $('imgHint').hidden=t!=='trace'; }
-$('imgMode').addEventListener('change',syncImgOpts);
+function syncImgOpts(){ const t=$('imgMode').value, pb=$('imgPreset').value==='pb'; document.querySelectorAll('#imgOpts [data-im]').forEach(el=>el.hidden=el.dataset.im!==t||(el.hasAttribute('data-pb')&&!pb)); $('imgHint').hidden=t!=='trace'; }
+$('imgMode').addEventListener('change',syncImgOpts); $('imgPreset').addEventListener('change',syncImgOpts);
 function dropImg(it){ URL.revokeObjectURL(it.url); if(it.svgUrl) URL.revokeObjectURL(it.svgUrl); }
 $('imgList').addEventListener('click',e=>{ const b=e.target.closest('[data-img-rm]'); if(!b||IMG.busy) return; const it=IMG.items.find(x=>x.id===b.dataset.imgRm); if(!it) return; dropImg(it); IMG.items=IMG.items.filter(x=>x!==it); renderImgs(); });
 $('imgClear').addEventListener('click',()=>{ if(IMG.busy) return; IMG.items.forEach(dropImg); IMG.items=[]; renderImgs(); $('imgMsg').textContent=''; });
@@ -1645,8 +1647,19 @@ function traceIn(img,opt){
 const PRESETS={
   logo:{numberofcolors:8,colorquantcycles:3,pathomit:8,blurradius:0,ltres:1,qtres:1},
   ilus:{numberofcolors:16,colorquantcycles:3,pathomit:8,blurradius:0,ltres:1,qtres:1},
-  foto:{numberofcolors:32,colorquantcycles:2,pathomit:4,blurradius:2,blurdelta:20,ltres:1,qtres:1}
+  foto:{numberofcolors:32,colorquantcycles:2,pathomit:4,blurradius:2,blurdelta:20,ltres:1,qtres:1},
+  pb:{numberofcolors:2,colorsampling:0,colorquantcycles:1,pathomit:8,blurradius:0,ltres:1,qtres:1,pal:[{r:0,g:0,b:0,a:255},{r:255,g:255,b:255,a:255}]}
 };
+// preto e branco: cinza (sobre fundo branco) → limiar → só preto ou branco
+function toBW(img,thr,inv){
+  const d=img.data;
+  for(let i=0;i<d.length;i+=4){
+    const a=d[i+3]/255, lum=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])*a+255*(1-a);
+    let v=lum<thr?0:255; if(inv) v=255-v;
+    d[i]=d[i+1]=d[i+2]=v; d[i+3]=255;
+  }
+  return img;
+}
 async function imgToSvg(it){
   if($('imgMode').value==='embed'){
     const data=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error('não consegui ler a imagem.')); r.readAsDataURL(it.file); });
@@ -1656,8 +1669,10 @@ async function imgToSvg(it){
   const k=Math.min(1,max/Math.max(it.w,it.h)), W=Math.max(1,Math.round(it.w*k)), H=Math.max(1,Math.round(it.h*k));
   const im=await loadImage(it.url); const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const ctx=cv.getContext('2d'); ctx.imageSmoothingQuality='high'; ctx.drawImage(im,0,0,W,H);
-  const data=ctx.getImageData(0,0,W,H); cv.width=cv.height=0;
-  let svg=await traceIn(data,{...PRESETS[$('imgPreset').value]||PRESETS.ilus,viewbox:true,roundcoords:1});
+  const preset=$('imgPreset').value;
+  let data=ctx.getImageData(0,0,W,H); cv.width=cv.height=0;
+  if(preset==='pb') data=toBW(data,numIn('imgThr',50,1,99)/100*255,$('imgInv').checked);
+  let svg=await traceIn(data,{...PRESETS[preset]||PRESETS.ilus,viewbox:true,roundcoords:1});
   if($('imgBg').checked) svg=svg.replace(/<path\b[^>]*fill="rgb\((\d+),(\d+),(\d+)\)"[^>]*\/>/g,(m,r,g,b)=>(+r>=235&&+g>=235&&+b>=235)?'':m);
   svg=svg.replace(/^<svg\b/,`<svg width="${it.w}" height="${it.h}"`).replace(/\sdesc="[^"]*"/,'');
   return SVG_HEAD+svg;
