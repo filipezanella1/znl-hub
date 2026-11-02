@@ -80,10 +80,11 @@ function build(db, spaceHandle) {
     const ci = Math.abs(l.colorIndex | 0);
     if (ci >= 1 && ci <= 255) c = ci === 7 ? WHITE7 : ACI[ci];
     else if (typeof l.color === 'number') c = l.color & 0xffffff;
-    return { name: l.name, color: c, aci: l.colorIndex, off: !!l.off || l.colorIndex < 0, frozen: !!l.frozen, locked: !!l.locked, count: 0, lineType: l.lineType || '' };
+    return { name: l.name, handle: l.handle, color: c, aci: l.colorIndex, off: !!l.off || l.colorIndex < 0, frozen: !!l.frozen, locked: !!l.locked, count: 0, lineType: l.lineType || '' };
   });
   const LI = new Map(layers.map((l, i) => [l.name, i]));
   const blocks = new Map();
+  const paperVps = new Set(((db.objects && db.objects.LAYOUT) || []).map(l => l.viewportId).filter(Boolean));
   const blocksH = new Map();
   for (const b of db.tables.BLOCK_RECORD.entries) { if (!blocks.has(b.name)) blocks.set(b.name, b); blocksH.set(b.handle, b); }
   const blockOf = e => (e.blockHandle && blocksH.get(e.blockHandle)) || blocks.get(e.name);
@@ -372,10 +373,13 @@ function build(db, spaceHandle) {
         case 'IMAGE': case 'WIPEOUT': {
           const p = e.position, u = e.uPixel, v = e.vPixel, sz = e.imageSize || { x: 1, y: 1 };
           const cb = e.clippingBoundaryPath;
-          if (e.type === 'WIPEOUT' && cb && cb.length > 2) {
+          if (e.type === 'WIPEOUT') { // máscara: preenche com a cor do fundo, sem contorno
+            const save = curC; curC = -2;
             begin();
-            for (const q of cb) { const px = q.x + 0.5, py = 0.5 - q.y; P(M, p.x + u.x * px * sz.x + v.x * py * sz.y, p.y + u.y * px * sz.x + v.y * py * sz.y); }
-            end(1);
+            if (cb && cb.length > 2) for (const q of cb) { const px = q.x + 0.5, py = 0.5 - q.y; P(M, p.x + u.x * px * sz.x + v.x * py * sz.y, p.y + u.y * px * sz.x + v.y * py * sz.y); }
+            else { const ux = u.x * sz.x, uy = u.y * sz.x, vx = v.x * sz.y, vy = v.y * sz.y; P(M, p.x, p.y); P(M, p.x + ux, p.y + uy); P(M, p.x + ux + vx, p.y + uy + vy); P(M, p.x + vx, p.y + vy); }
+            end(1 | 2);
+            curC = save;
           } else {
             const ux = u.x * sz.x, uy = u.y * sz.x, vx = v.x * sz.y, vy = v.y * sz.y;
             begin(); P(M, p.x, p.y); P(M, p.x + ux, p.y + uy); P(M, p.x + ux + vx, p.y + uy + vy); P(M, p.x + vx, p.y + vy); end(1);
@@ -384,7 +388,7 @@ function build(db, spaceHandle) {
           break;
         }
         case 'VIEWPORT': {
-          if (e.viewportId === 1 || !e.width) break;
+          if (e.viewportId === 1 || !e.width || paperVps.has(e.handle)) break;
           const c0 = e.viewportCenter, w = e.width / 2, h = e.height / 2;
           begin(); P(M, c0.x - w, c0.y - h); P(M, c0.x + w, c0.y - h); P(M, c0.x + w, c0.y + h); P(M, c0.x - w, c0.y + h); end(1);
           break;
@@ -588,7 +592,33 @@ function spaces(db) {
   const ls = lay.filter(l => l.layoutName !== 'Model').sort((a, b) => (a.tabOrder || 0) - (b.tabOrder || 0));
   for (const l of ls) {
     const br = brs.find(b => b.handle === l.paperSpaceTableId || b.layout === l.handle);
-    if (br) out.push({ handle: br.handle, name: l.layoutName });
+    if (br) out.push({ handle: br.handle, name: l.layoutName, vp: l.viewportId });
+  }
+  return out;
+}
+
+// Janelas de viewport de um layout: como mapear o model space para o papel
+function viewports(db, spaceHandle, origin) {
+  const sp = spaces(db).find(x => x.handle === spaceHandle);
+  if (!sp || sp.model) return [];
+  const br = db.tables.BLOCK_RECORD.entries.find(b => b.handle === spaceHandle);
+  const list = (br && br.entities && br.entities.length) ? br.entities : db.entities.filter(e => e.ownerBlockRecordSoftId === spaceHandle);
+  const layerByHandle = new Map(db.tables.LAYER.entries.map(l => [String(l.handle).toUpperCase(), l.name]));
+  const out = [];
+  for (const v of list) {
+    if (v.type !== 'VIEWPORT' || !v.width || !v.height || !v.viewHeight) continue;
+    if (sp.vp && v.handle === sp.vp) continue;           // a viewport do próprio papel
+    if (v.isVisible === false) continue;
+    const dir = v.viewDirection || { x: 0, y: 0, z: 1 };
+    const plan = Math.abs(dir.x) < 1e-6 && Math.abs(dir.y) < 1e-6;
+    const frozen = (v.frozenLayerIds || []).map(h => layerByHandle.get(String(h).toUpperCase())).filter(Boolean);
+    const clipped = !!(v.statusBitFlags & 0x10000) && v.clippingBoundaryId && v.clippingBoundaryId !== '0';
+    out.push({
+      h: v.handle, cx: v.viewportCenter.x - origin[0], cy: v.viewportCenter.y - origin[1], w: v.width, ht: v.height,
+      vx: v.displayCenter.x, vy: v.displayCenter.y, vh: v.viewHeight, tw: typeof v.viewTwistAngle === 'number' ? v.viewTwistAngle : 0,
+      tx: v.targetPoint ? v.targetPoint.x : 0, ty: v.targetPoint ? v.targetPoint.y : 0, flipX: dir.z < 0,
+      plan, frozen, clip: clipped ? String(v.clippingBoundaryId).toUpperCase() : null
+    });
   }
   return out;
 }
@@ -633,7 +663,8 @@ self.onmessage = async ev => {
     } else if (cmd === 'space') {
       const res = build(DB, ev.data.handle);
       const p = pack(res);
-      post(id, 'scene', { ...p, transfer: undefined, space: ev.data.handle }, p.transfer);
+      const vps = viewports(DB, ev.data.handle, res.origin);
+      post(id, 'scene', { ...p, transfer: undefined, space: ev.data.handle, vps }, p.transfer);
     } else if (cmd === 'info') {
       const e = HMAP && HMAP.get(ev.data.handle);
       post(id, 'info', { ent: e ? cleanForInfo(e) : null });

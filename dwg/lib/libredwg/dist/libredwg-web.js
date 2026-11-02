@@ -3216,7 +3216,8 @@ class LibreEntityConverter {
     const backClipZ = libredwg.dwg_dynapi_entity_data(entity, "back_clip_z");
     const viewHeight = libredwg.dwg_dynapi_entity_data(entity, "VIEWSIZE");
     const snapAngle = libredwg.dwg_dynapi_entity_data(entity, "SNAPANG");
-    const viewTwistAngle = libredwg.dwg_dynapi_entity_data(entity, "twist_angle");
+    let viewTwistAngle = libredwg.dwg_dynapi_entity_data(entity, "twist_angle");
+    for (const f of ["VIEWTWIST", "twist", "view_twist"]) { if (typeof viewTwistAngle === "number") break; try { viewTwistAngle = libredwg.dwg_dynapi_entity_data(entity, f); } catch (_) {} }
     const circleZoomPercent = libredwg.dwg_dynapi_entity_data(entity, "circle_zoom");
     const numFrozenLayers = libredwg.dwg_dynapi_entity_data(
       entity,

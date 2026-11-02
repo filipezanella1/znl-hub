@@ -304,6 +304,7 @@ function busy(msg) { $('busy').hidden = !msg; if (msg) $('busyMsg').textContent 
 const app = $('app'), main = $('main'), cv = $('cv'), ovl = $('ovl');
 const ctx = cv.getContext('2d'), octx = ovl.getContext('2d');
 let SC = null;           // cena
+let MODEL = null;        // cena do model space (usada pelas viewports dos layouts)
 let FILE = null;         // { name, bytes, version }
 let view = { x: 0, y: 0, s: 1 };
 let dpr = 1, CW = 0, CH = 0;
@@ -351,17 +352,18 @@ function prepScene(m) {
 
 function buildPaths(m) {
   const g = m.geo, groups = new Map();
-  const get = (l, c, k) => { const key = l + '|' + c + '|' + k; let o = groups.get(key); if (!o) { o = { l, c, k, p: new Path2D() }; groups.set(key, o); } return o.p; };
+  const get = (l, c, k) => { const key = l + '|' + c + '|' + k; let o = groups.get(key); if (!o) { o = { l, c, k, w: k[0] === 'w' ? +k.slice(1) : 0, p: new Path2D() }; groups.set(key, o); } return o.p; };
   for (let i = 0; i < g.pS.length; i++) {
     const f = g.pF[i], s = g.pS[i] * 2, n = g.pN[i];
-    const k = (f & 16) ? ((f & 256) ? 'h' : 'f') : (f & 2) ? 'f' : (f & 128) ? 'p' : (f & 8) ? 'x' : 's';
+    const wd = g.pW ? g.pW[i] : 0;
+    const k = (f & 16) ? ((f & 256) ? 'h' : 'f') : (f & 2) ? 'f' : (f & 128) ? 'p' : (f & 8) ? 'x' : wd > 0 ? 'w' + wd : 's';
     const P = get(g.pL[i], g.pC[i], k);
     P.moveTo(g.co[s], g.co[s + 1]);
     for (let j = 1; j < n; j++) P.lineTo(g.co[s + 2 * j], g.co[s + 2 * j + 1]);
     if ((f & 1) && n > 2) P.closePath();
   }
-  const order = { h: 0, f: 1, p: 2, s: 3, x: 4 };
-  m.groups = [...groups.values()].sort((a, b) => order[a.k] - order[b.k]);
+  const order = { h: 0, f: 1, p: 2, w: 3, s: 3, x: 4 };
+  m.groups = [...groups.values()].sort((a, b) => order[a.k[0]] - order[b.k[0]]);
   // textos: raio de corte
   for (const t of m.tx) {
     const lines = t.s.split('\n'), L = Math.max(...lines.map(s => s.length));
@@ -432,8 +434,9 @@ function zoomAt(px, py, f) {
 // ---------- cores ----------
 const WHITE7 = 0x1000000;
 const hex = c => '#' + (c & 0xffffff).toString(16).padStart(6, '0');
-function colorCss(c, l) {
-  if (c === -1) c = SC.layers[l] ? SC.layers[l].color : WHITE7;
+function colorCss(c, l, S = SC) {
+  if (c === -2) return white ? '#ffffff' : '#000000'; // máscara (wipeout)
+  if (c === -1) c = S.layers[l] ? S.layers[l].color : WHITE7;
   if (c === WHITE7) return white ? '#000000' : '#ffffff';
   if (white && (c & 0xffffff) === 0xffffff) return '#000000';
   return hex(c);
@@ -458,17 +461,11 @@ function quickDraw() {
   ctx.setTransform(k, 0, 0, k, (CW / 2 * (1 - k) + dx) * dpr, (CH / 2 * (1 - k) + dy) * dpr);
   ctx.drawImage(snapBmp, 0, 0);
 }
-function render() {
-  const t0 = performance.now();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, cv.width, cv.height);
-  if (!SC) return;
-  const vis = SC.vis, s = view.s;
-  ctx.setTransform(dpr * s, 0, 0, -dpr * s, dpr * (CW / 2 - view.x * s), dpr * (CH / 2 + view.y * s));
-  ctx.lineWidth = 1 / s; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  for (const G of SC.groups) {
-    if (!vis[G.l]) continue;
-    const col = colorCss(G.c, G.l);
+function drawGeom(S, vis, lw) {
+  ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  for (const G of S.groups) {
+    if (!vis(G.l)) continue;
+    const col = colorCss(G.c, G.l, S);
     if (G.k === 'f' || G.k === 'h') {
       ctx.globalAlpha = G.k === 'h' ? 0.22 : 1;
       ctx.fillStyle = col; ctx.fill(G.p, 'evenodd');
@@ -476,17 +473,67 @@ function render() {
     } else {
       ctx.strokeStyle = col;
       if (G.k === 'p') { ctx.globalAlpha = 0.85; ctx.stroke(G.p); ctx.globalAlpha = 1; }
+      else if (G.w) { ctx.lineWidth = Math.max(G.w, lw); ctx.lineCap = 'butt'; ctx.lineJoin = 'miter'; ctx.stroke(G.p); ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; }
       else ctx.stroke(G.p);
     }
   }
-  // pontos
-  const P = SC.geo.pts, ps = 2 / s;
+  const P = S.geo.pts, ps = 2 * lw;
   for (let i = 0; i < P.length; i += 5) {
-    if (!vis[P[i + 3]]) continue;
-    ctx.fillStyle = colorCss(P[i + 2], P[i + 3]); ctx.fillRect(P[i] - ps, P[i + 1] - ps, ps * 2, ps * 2);
+    if (!vis(P[i + 3])) continue;
+    ctx.fillStyle = colorCss(P[i + 2], P[i + 3], S); ctx.fillRect(P[i] - ps, P[i + 1] - ps, ps * 2, ps * 2);
   }
-  // textos
-  drawTexts();
+}
+// transformação model (coords relativas) -> tela, para uma viewport de layout
+function vpTransform(v) {
+  const k = v.ht / v.vh, cs = Math.cos(v.tw), sn = Math.sin(v.tw), s = view.s;
+  const ox = MODEL.origin[0] - v.tx, oy = MODEL.origin[1] - v.ty;
+  const a1 = k * cs, b1 = k * sn, c1 = -k * sn, d1 = k * cs;
+  const e1 = a1 * ox + c1 * oy + v.cx - k * v.vx, f1 = b1 * ox + d1 * oy + v.cy - k * v.vy;
+  return { a: s * a1, b: -s * b1, c: s * c1, d: -s * d1, e: s * (e1 - view.x) + CW / 2, f: -s * (f1 - view.y) + CH / 2, sc: s * k, rot: v.tw };
+}
+function vpClip(v) {
+  ctx.beginPath();
+  const I = v.clip ? SC.eH.indexOf(v.clip) : -1;
+  if (I >= 0 && SC.idx.eP0[I] >= 0) {
+    const g = SC.geo;
+    for (let i = SC.idx.eP0[I]; i < SC.idx.eP1[I]; i++) {
+      const st = g.pS[i] * 2, n = g.pN[i];
+      ctx.moveTo(sx(g.co[st]) * dpr, sy(g.co[st + 1]) * dpr);
+      for (let j = 1; j < n; j++) ctx.lineTo(sx(g.co[st + 2 * j]) * dpr, sy(g.co[st + 2 * j + 1]) * dpr);
+      ctx.closePath();
+    }
+  } else {
+    const x0 = sx(v.cx - v.w / 2) * dpr, x1 = sx(v.cx + v.w / 2) * dpr, y0 = sy(v.cy + v.ht / 2) * dpr, y1 = sy(v.cy - v.ht / 2) * dpr;
+    ctx.rect(x0, y0, x1 - x0, y1 - y0);
+  }
+  ctx.clip('evenodd');
+}
+function render() {
+  const t0 = performance.now();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (!SC) return;
+  const s = view.s;
+  // conteúdo do model space visto pelas viewports do layout
+  if (SC.vps && SC.vps.length && MODEL && MODEL !== SC) {
+    for (const v of SC.vps) {
+      if (!v.plan) continue;
+      const T = vpTransform(v);
+      const fz = v.frozenIdx || (v.frozenIdx = new Set(v.frozen.map(n => MODEL.layerIdx.get(n)).filter(x => x !== undefined)));
+      const vis = l => MODEL.vis[l] && !fz.has(l);
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      vpClip(v);
+      ctx.setTransform(dpr * T.a, dpr * T.b, dpr * T.c, dpr * T.d, dpr * T.e, dpr * T.f);
+      drawGeom(MODEL, vis, 1 / T.sc);
+      drawTexts(MODEL, vis, T);
+      ctx.restore();
+    }
+  }
+  ctx.setTransform(dpr * s, 0, 0, -dpr * s, dpr * (CW / 2 - view.x * s), dpr * (CH / 2 + view.y * s));
+  const vis = l => SC.vis[l];
+  drawGeom(SC, vis, 1 / s);
+  drawTexts(SC, vis, { a: s, b: 0, c: 0, d: -s, e: CW / 2 - view.x * s, f: CH / 2 + view.y * s, sc: s, rot: 0 });
   lastMs = performance.now() - t0;
   // instantâneo para interação fluida em desenhos pesados
   if (lastMs > 28) {
@@ -495,19 +542,20 @@ function render() {
   }
 }
 const FONT = '"Arial Narrow","IBM Plex Sans Condensed","Liberation Sans Narrow",Arial,sans-serif';
-function drawTexts() {
-  const s = view.s, vx = view.x, vy = view.y, R = Math.hypot(CW, CH) / 2 / s;
+function drawTexts(S, vis, T) {
+  const s = T.sc;
   ctx.textBaseline = 'alphabetic';
   let lastFont = '';
-  for (const t of SC.tx) {
-    if (!SC.vis[t.l]) continue;
+  for (const t of S.tx) {
+    if (!vis(t.l)) continue;
     const hp = t.h * s; if (hp < 1.6) continue;
-    if (Math.hypot(t.x - vx, t.y - vy) > R + t.rad) continue;
+    const X = T.a * t.x + T.c * t.y + T.e, Y = T.b * t.x + T.d * t.y + T.f, rr = t.rad * s;
+    if (X < -rr || Y < -rr || X > CW + rr || Y > CH + rr) continue;
     const fpx = hp / 0.72;
     const f = fpx.toFixed(1) + 'px ' + FONT; if (f !== lastFont) { ctx.font = f; lastFont = f; }
-    ctx.fillStyle = colorCss(t.c, t.l);
-    ctx.setTransform(dpr, 0, 0, dpr, dpr * sx(t.x), dpr * sy(t.y));
-    ctx.rotate(-t.r);
+    ctx.fillStyle = colorCss(t.c, t.l, S);
+    ctx.setTransform(dpr, 0, 0, dpr, dpr * X, dpr * Y);
+    ctx.rotate(-(t.r + T.rot));
     if (t.wf !== 1) ctx.scale(t.wf, 1);
     if (!t.m) {
       const w = ctx.measureText(t.s).width;
@@ -538,7 +586,6 @@ function drawTexts() {
       }
     }
   }
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
 // ---------- sobreposição (cursor, snap, medidas, seleção) ----------
@@ -899,11 +946,12 @@ function layersUI() {
 }
 $('layers').addEventListener('click', e => {
   const li = e.target.closest('li[data-l]'); if (!li) return;
-  const i = +li.dataset.l; SC.vis[i] = SC.vis[i] ? 0 : 1; layersUI(); render(); drawOvl();
+  const i = +li.dataset.l; SC.vis[i] = SC.vis[i] ? 0 : 1; syncVis(i); layersUI(); render(); drawOvl();
 });
+function syncVis(i) { if (!MODEL || SC === MODEL) return; const j = MODEL.layerIdx.get(SC.layers[i].name); if (j !== undefined) MODEL.vis[j] = SC.vis[i]; }
 $('lFilter').oninput = () => SC && layersUI();
-$('lAll').onclick = () => { if (!SC) return; const q = $('lFilter').value.trim().toLowerCase(); SC.layers.forEach((l, i) => { if (!q || l.name.toLowerCase().includes(q)) SC.vis[i] = 1; }); layersUI(); render(); };
-$('lNone').onclick = () => { if (!SC) return; const q = $('lFilter').value.trim().toLowerCase(); SC.layers.forEach((l, i) => { if (!q || l.name.toLowerCase().includes(q)) SC.vis[i] = 0; }); layersUI(); render(); drawOvl(); };
+$('lAll').onclick = () => { if (!SC) return; const q = $('lFilter').value.trim().toLowerCase(); SC.layers.forEach((l, i) => { if (!q || l.name.toLowerCase().includes(q)) { SC.vis[i] = 1; syncVis(i); } }); layersUI(); render(); };
+$('lNone').onclick = () => { if (!SC) return; const q = $('lFilter').value.trim().toLowerCase(); SC.layers.forEach((l, i) => { if (!q || l.name.toLowerCase().includes(q)) { SC.vis[i] = 0; syncVis(i); } }); layersUI(); render(); drawOvl(); };
 
 // ---------- abrir ----------
 const VNAME = { AC1009: 'R12', AC1012: 'R13', AC1014: 'R14', AC1015: '2000', AC1018: '2004', AC1021: '2007', AC1024: '2010', AC1027: '2013', AC1032: '2018', DXF: 'DXF' };
@@ -917,12 +965,15 @@ async function openFile(file) {
     const copyB = bytes.slice();
     const m = await call('open', { bytes: copyB.buffer }, msg => busy(msg + (msg.includes('leitor') ? ' (só demora na primeira vez)' : '')), [copyB.buffer]);
     FILE = { name: file.name, bytes, version: m.version };
+    MODEL = null;
     setScene(m, true);
+    MODEL = SC;
     $('fileInfo').hidden = false; $('fName').textContent = file.name; $('fName').title = file.name;
     $('fVer').textContent = m.version === 'DXF' ? 'DXF' : (VRANGE[m.version] ? VRANGE[m.version].replace('AutoCAD ', 'ACAD ') : m.version) + ' · ' + m.version;
     $('fVer').title = VRANGE[m.version] || '';
-    U = UNITS[m.insunits] || 'u';
-    $('sUnits').textContent = 'unidade: ' + (UNITS[m.insunits] || 'sem unidade');
+    const utm = Math.abs(m.origin[0]) > 1.5e5 && Math.abs(m.origin[0]) < 8.5e5 && Math.abs(m.origin[1]) > 6e5 && Math.abs(m.origin[1]) < 1e7;
+    U = utm && m.insunits !== 6 ? 'm' : (UNITS[m.insunits] || 'u');
+    $('sUnits').textContent = utm && m.insunits !== 6 ? 'unidade: m (coordenadas UTM; o arquivo diz ' + (UNITS[m.insunits] || 'sem unidade') + ')' : 'unidade: ' + (UNITS[m.insunits] || 'sem unidade');
     // espaços
     const sp = $('spaces');
     if (m.spaces && m.spaces.length > 1) {
@@ -939,11 +990,17 @@ async function openFile(file) {
   } finally { busy(''); }
 }
 function setScene(m, fit) {
-  prepScene(m);
+  if (!m.prepped) {
+    prepScene(m); m.prepped = true;
+    m.usedLayers = new Set(m.geo.pL);
+    m.layerIdx = new Map(m.layers.map((l, i) => [l.name, i]));
+    m.vis = new Uint8Array(m.layers.length);
+    m.layers.forEach((l, i) => m.vis[i] = (l.off || l.frozen) ? 0 : 1);
+    if (MODEL && m !== MODEL) m.layers.forEach((l, i) => { const j = MODEL.layerIdx.get(l.name); if (j !== undefined) m.vis[i] = MODEL.vis[j]; });
+    if (m.vps) for (const v of m.vps) for (const n of v.frozen) { const i = m.layerIdx.get(n); if (i !== undefined) m.usedLayers.add(i); }
+    if (m.vps && m.vps.length) m.vps.forEach(v => v.plan && MODEL && MODEL.usedLayers.forEach(i => { const j = m.layerIdx.get(MODEL.layers[i].name); if (j !== undefined) m.usedLayers.add(j); }));
+  }
   SC = m;
-  SC.vis = new Uint8Array(m.layers.length);
-  SC.usedLayers = new Set(m.geo.pL);
-  m.layers.forEach((l, i) => SC.vis[i] = (l.off || l.frozen) ? 0 : 1);
   selected = -1; pts = []; measures.length = 0; listMeasures(); showInfo(-1);
   $('insp').innerHTML = '<p class="hint">Use <b>Selecionar</b> e clique numa linha, texto ou bloco para ver o <b>handle</b>, a camada, as coordenadas, o comprimento e a área.</p>';
   $('empty').hidden = true; $('bFit').disabled = false;
@@ -956,7 +1013,7 @@ $('spaces').addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || b.getAttribute('aria-pressed') === 'true') return;
   busy('abrindo ' + b.textContent + '…');
   try {
-    const m = await call('space', { handle: b.dataset.h });
+    const m = (MODEL && b.dataset.h === MODEL.space) ? MODEL : await call('space', { handle: b.dataset.h });
     for (const x of $('spaces').children) x.setAttribute('aria-pressed', String(x === b));
     setScene(m, true);
   } catch (err) { toast(err.message, true); } finally { busy(''); }
