@@ -175,7 +175,7 @@ details.raw pre{font:11px/1.45 var(--mono);white-space:pre-wrap;overflow-wrap:an
     </div>
     <button class="ib" id="bSnap" aria-pressed="true" title="Snap em pontos (F3)">snap</button>
     <button class="ib" id="bFit" title="Enquadrar tudo (Z)" disabled>ajustar</button>
-    <button class="ib" id="bBg" title="Fundo preto/branco">fundo</button>
+    <button class="ib" id="bTheme" title="Alternar modo claro / escuro">☾ escuro</button>
     <button class="ib only-m" id="bRight" aria-label="Painel">ⓘ</button>
   </header>
 
@@ -262,7 +262,7 @@ details.raw pre{font:11px/1.45 var(--mono);white-space:pre-wrap;overflow-wrap:an
     <span id="sUnits"></span>
     <span id="sEnts"></span>
     <span class="sp"></span>
-    <span id="sHint">roda: zoom · arrastar: mover · Z: ajustar</span>
+    <span id="sHint">clique/janela: selecionar (soma) · Shift: tirar · botão do meio: mover · Esc: limpar</span>
   </footer>
 </div>
 
@@ -310,13 +310,23 @@ let view = { x: 0, y: 0, s: 1 };
 let dpr = 1, CW = 0, CH = 0;
 let white = false;
 let tool = 'sel', snapOn = true;
-let selected = -1;
+let selected = -1;      // entidade mostrada no inspetor
+const sel = new Set();   // seleção atual (várias)
+let box = null;          // retângulo de seleção em andamento
 let cur = null;          // posição do cursor (mundo relativo) e snap
 let pts = [];            // pontos da medida em andamento
 const measures = [];     // medidas concluídas
 
-try { white = localStorage.getItem('dwgv.bg') === 'w'; } catch (_) {}
-main.classList.toggle('white', white);
+let theme = null;
+try { theme = localStorage.getItem('dwgv.theme'); } catch (_) {}
+if (theme !== 'light' && theme !== 'dark') theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', theme);
+  white = theme === 'light';
+  main.classList.toggle('white', white);
+  const b = $('bTheme'); b.textContent = white ? '☀ claro' : '☾ escuro'; b.setAttribute('aria-label', white ? 'Modo claro (mudar para escuro)' : 'Modo escuro (mudar para claro)');
+}
+applyTheme();
 
 // ---------- cena: índices e caminhos ----------
 function prepScene(m) {
@@ -595,13 +605,13 @@ function drawOvl() {
   octx.clearRect(0, 0, ovl.width, ovl.height);
   if (!SC) return;
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const sel = getComputedStyle(document.documentElement).getPropertyValue('--sel').trim() || '#4aa8ff';
+  const selc = getComputedStyle(document.documentElement).getPropertyValue('--sel').trim() || '#4aa8ff';
   // seleção
-  if (selected >= 0) {
-    const g = SC.geo, I = SC.idx;
-    octx.lineWidth = 3; octx.strokeStyle = sel; octx.globalAlpha = 0.55; octx.lineJoin = 'round';
+  if (sel.size) {
+    const g = SC.geo, I = SC.idx, many = sel.size > 1;
+    octx.lineWidth = 3; octx.strokeStyle = selc; octx.globalAlpha = 0.55; octx.lineJoin = 'round';
     octx.beginPath();
-    for (let i = I.eP0[selected]; i >= 0 && i < I.eP1[selected]; i++) {
+    for (const e of sel) for (let i = I.eP0[e]; i >= 0 && i < I.eP1[e]; i++) {
       if (g.pF[i] & 128) continue;
       const s = g.pS[i] * 2, n = g.pN[i];
       octx.moveTo(sx(g.co[s]), sy(g.co[s + 1]));
@@ -609,9 +619,17 @@ function drawOvl() {
       if ((g.pF[i] & 1) && n > 2) octx.closePath();
     }
     octx.stroke(); octx.globalAlpha = 1;
-    for (let i = I.eT0[selected]; i >= 0 && i < I.eT1[selected]; i++) { const t = SC.tx[i]; octx.strokeStyle = sel; octx.lineWidth = 1.5; octx.strokeRect(sx(t.x) - 3, sy(t.y) - 3, 6, 6); }
-    octx.fillStyle = sel;
-    for (let i = I.eS0[selected]; i >= 0 && i < I.eS1[selected]; i++) { const k = g.snK[i]; if (k === 2 || k === 6) continue; octx.fillRect(sx(g.snp[2 * i]) - 3.5, sy(g.snp[2 * i + 1]) - 3.5, 7, 7); }
+    octx.strokeStyle = selc; octx.lineWidth = 1.5; octx.fillStyle = selc;
+    for (const e of sel) {
+      for (let i = I.eT0[e]; i >= 0 && i < I.eT1[e]; i++) { const t = SC.tx[i]; octx.strokeRect(sx(t.x) - 3, sy(t.y) - 3, 6, 6); }
+      if (!many || sel.size < 400) for (let i = I.eS0[e]; i >= 0 && i < I.eS1[e]; i++) { const k = g.snK[i]; if (k === 2 || k === 6) continue; octx.fillRect(sx(g.snp[2 * i]) - 3, sy(g.snp[2 * i + 1]) - 3, 6, 6); }
+    }
+  }
+  // retângulo de seleção (esquerda→direita: janela; direita→esquerda: cruzando)
+  if (box) {
+    const cross = box.x1 < box.x0, x = Math.min(box.x0, box.x1), y = Math.min(box.y0, box.y1), w = Math.abs(box.x1 - box.x0), h = Math.abs(box.y1 - box.y0);
+    octx.fillStyle = cross ? 'rgba(80,200,120,.14)' : 'rgba(74,168,255,.14)'; octx.fillRect(x, y, w, h);
+    octx.strokeStyle = cross ? '#50c878' : '#4aa8ff'; octx.lineWidth = 1; octx.setLineDash(cross ? [6, 4] : []); octx.strokeRect(x + .5, y + .5, w, h); octx.setLineDash([]);
   }
   // medidas concluídas
   for (const m of measures) drawMeasure(m.pts, m.kind, false);
@@ -801,7 +819,7 @@ $('mList').addEventListener('click', e => {
 });
 $('mClear').onclick = () => { measures.length = 0; listMeasures(); };
 $('mCopy').onclick = () => copy(measures.map(m => { const t = measureText(m); return t.t + '\t' + t.v + (t.s ? '\t' + t.s : ''); }).join('\n'));
-$('dec').onchange = () => { DEC = +$('dec').value; try { localStorage.setItem('dwgv.dec', DEC); } catch (_) {} listMeasures(); if (selected >= 0) showInfo(selected); hudUpdate(); };
+$('dec').onchange = () => { DEC = +$('dec').value; try { localStorage.setItem('dwgv.dec', DEC); } catch (_) {} listMeasures(); if (sel.size === 1) showInfo(selected); else if (sel.size) showMulti(); hudUpdate(); };
 
 // ---------- inspetor ----------
 async function showInfo(e) {
@@ -905,12 +923,20 @@ function renderInfo(e, ent) {
   return head + (extra ? `<div class="card">${extra}</div>` : '') + raw;
 }
 $('insp').addEventListener('click', ev => {
+  const tr = ev.target.closest('tr[data-e]'); if (tr) { select(+tr.dataset.e); zoomEnt(+tr.dataset.e); return; }
   const b = ev.target.closest('button'); if (!b) return;
   if (b.dataset.copy) copy(b.dataset.copy);
   if (b.dataset.copyv) copy(window.__verts || '');
   if (b.id === 'iZoom' && selected >= 0) zoomEnt(selected);
-  if (b.id === 'iClear') { selected = -1; showInfo(-1); drawOvl(); }
+  if (b.id === 'iClear') { select(-1); }
+  if (b.id === 'mHandles') copy([...sel].map(e => SC.eH[e]).join('\n'));
+  if (b.id === 'mZoom') zoomSel();
 });
+function zoomSel() {
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; const B = SC.geo.eB;
+  for (const e of sel) { if (!isFinite(B[4 * e])) continue; a = Math.min(a, B[4 * e]); b = Math.min(b, B[4 * e + 1]); c = Math.max(c, B[4 * e + 2]); d = Math.max(d, B[4 * e + 3]); }
+  if (isFinite(a)) { fitBox([a, b, c, d], 0.1); render(); drawOvl(); }
+}
 function zoomEnt(e) {
   const b = [...SC.geo.eB.slice(4 * e, 4 * e + 4)];
   if (!isFinite(b[0])) return;
@@ -920,7 +946,68 @@ function zoomEnt(e) {
   else fitBox([cx - w / 2, cy - w / 2, cx + w / 2, cy + w / 2], 0.4);
   render(); drawOvl();
 }
-function select(e) { selected = e; drawOvl(); showInfo(e); if (e >= 0) showTab('insp'); }
+function select(e) { sel.clear(); if (e >= 0) sel.add(e); selChanged(); }
+function selChanged() {
+  drawOvl();
+  if (sel.size === 1) { selected = [...sel][0]; showInfo(selected); }
+  else { selected = -1; if (sel.size) showMulti(); else showInfo(-1); }
+  if (sel.size) showTab('insp');
+}
+// entidades dentro do retângulo (janela) ou tocadas por ele (cruzando)
+function boxSelect(b, add, remove) {
+  const x0 = wx(Math.min(b.x0, b.x1)), x1 = wx(Math.max(b.x0, b.x1)), y0 = wy(Math.max(b.y0, b.y1)), y1 = wy(Math.min(b.y0, b.y1));
+  const cross = b.x1 < b.x0, g = SC.geo, I = SC.idx, B = g.eB, found = [];
+  const inR = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+  const segHit = (ax, ay, bx, by) => {
+    if (inR(ax, ay) || inR(bx, by)) return true;
+    if (Math.max(ax, bx) < x0 || Math.min(ax, bx) > x1 || Math.max(ay, by) < y0 || Math.min(ay, by) > y1) return false;
+    const side = (px, py) => Math.sign((bx - ax) * (py - ay) - (by - ay) * (px - ax));
+    const s1 = side(x0, y0), s2 = side(x1, y0), s3 = side(x1, y1), s4 = side(x0, y1);
+    return !(s1 === s2 && s2 === s3 && s3 === s4);
+  };
+  for (let e = 0; e < SC.eH.length; e++) {
+    const a = B[4 * e], bb = B[4 * e + 1], c = B[4 * e + 2], d = B[4 * e + 3];
+    if (!isFinite(a) || !SC.vis[g.eL[e]]) continue;
+    if (c < x0 || a > x1 || d < y0 || bb > y1) continue;
+    if (a >= x0 && c <= x1 && bb >= y0 && d <= y1) { found.push(e); continue; }
+    if (!cross) continue;
+    let hit = false;
+    for (let i = I.eP0[e]; !hit && i >= 0 && i < I.eP1[e]; i++) {
+      if (g.pF[i] & 128) continue;
+      const st = g.pS[i], n = g.pN[i], m = ((g.pF[i] & 1) && n > 2) ? n : n - 1;
+      for (let j = 0; j < m && !hit; j++) { const p = st + j, q = st + (j + 1) % n; hit = segHit(g.co[2 * p], g.co[2 * p + 1], g.co[2 * q], g.co[2 * q + 1]); }
+    }
+    if (!hit && I.eT0[e] >= 0) hit = true; // texto: a caixa já cruza
+    if (hit) found.push(e);
+  }
+  if (!add && !remove) sel.clear();
+  for (const e of found) remove ? sel.delete(e) : sel.add(e);
+  selChanged();
+}
+function showMulti() {
+  const g = SC.geo, I = SC.idx, types = {}, layers = {};
+  let len = 0, area = 0, nArea = 0;
+  for (const e of sel) {
+    types[SC.eT[e]] = (types[SC.eT[e]] || 0) + 1;
+    const ln = SC.layers[g.eL[e]] ? SC.layers[g.eL[e]].name : '?'; layers[ln] = (layers[ln] || 0) + 1;
+    const t = SC.eT[e];
+    if (!/^(LINE|LWPOLYLINE|POLYLINE2D|POLYLINE3D|ARC|CIRCLE|ELLIPSE|SPLINE)$/.test(t)) continue;
+    for (let i = I.eP0[e]; i >= 0 && i < I.eP1[e]; i++) {
+      const st = g.pS[i], n = g.pN[i], closed = (g.pF[i] & 1) && n > 2; let A = 0;
+      for (let j = 0; j < (closed ? n : n - 1); j++) { const p = st + j, q = st + (j + 1) % n; len += Math.hypot(g.co[2 * q] - g.co[2 * p], g.co[2 * q + 1] - g.co[2 * p + 1]); A += g.co[2 * p] * g.co[2 * q + 1] - g.co[2 * q] * g.co[2 * p + 1]; }
+      if (closed) { area += Math.abs(A / 2); nArea++; }
+    }
+  }
+  const list = [...sel].slice(0, 300);
+  const rows = o => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('');
+  $('insp').innerHTML = `<div class="card"><h3>Seleção <span>${sel.size} entidades</span></h3>
+    <div class="big">${fmtG(len)} <small>${U} comprimento total</small></div>
+    <dl class="kv">${nArea ? `<dt>área</dt><dd><b>${fmtG(area)} ${U}²</b> (${nArea} fechada${nArea > 1 ? 's' : ''})</dd>` : ''}</dl>
+    <p class="hint">Soma de linhas, polilinhas, arcos, círculos e splines da seleção.</p>
+    <div class="row"><button class="ib" id="mHandles">copiar handles</button><button class="ib" id="mZoom">enquadrar</button><button class="ib" id="iClear">limpar seleção</button></div></div>
+    <div class="card"><span class="lbl">Por tipo</span><dl class="kv">${rows(types)}</dl><span class="lbl">Por camada</span><dl class="kv">${rows(layers)}</dl></div>
+    <div class="card"><span class="lbl">Entidades${sel.size > 300 ? ' (300 primeiras)' : ''}</span><table class="vt"><tr><th style="text-align:left">handle</th><th style="text-align:left">tipo</th><th style="text-align:left">camada</th></tr>${list.map(e => `<tr data-e="${e}" style="cursor:pointer"><td>${esc(SC.eH[e])}</td><td style="text-align:left">${SC.eT[e]}</td><td style="text-align:left">${esc(SC.layers[g.eL[e]] ? SC.layers[g.eL[e]].name : '')}</td></tr>`).join('')}</table></div>`;
+}
 function searchHandle() {
   if (!SC) return;
   const q = $('hSearch').value.trim().toUpperCase().replace(/^#/, ''); if (!q) return;
@@ -1001,7 +1088,7 @@ function setScene(m, fit) {
     if (m.vps && m.vps.length) m.vps.forEach(v => v.plan && MODEL && MODEL.usedLayers.forEach(i => { const j = m.layerIdx.get(MODEL.layers[i].name); if (j !== undefined) m.usedLayers.add(j); }));
   }
   SC = m;
-  selected = -1; pts = []; measures.length = 0; listMeasures(); showInfo(-1);
+  selected = -1; sel.clear(); pts = []; measures.length = 0; listMeasures(); showInfo(-1);
   $('insp').innerHTML = '<p class="hint">Use <b>Selecionar</b> e clique numa linha, texto ou bloco para ver o <b>handle</b>, a camada, as coordenadas, o comprimento e a área.</p>';
   $('empty').hidden = true; $('bFit').disabled = false;
   $('sEnts').textContent = m.eH.length.toLocaleString('pt-BR') + ' entidades';
@@ -1030,13 +1117,13 @@ function setTool(t) {
   tool = t; pts = [];
   for (const b of $('tools').children) b.setAttribute('aria-pressed', String(b.dataset.tool === t));
   hudUpdate(); drawOvl();
-  $('sHint').textContent = t === 'sel' ? 'clique: selecionar · arrastar: mover · Z: ajustar' : t === 'pt' ? 'clique: marcar coordenada · Esc: sair' : 'clique: ponto · Enter/duplo clique/botão direito: concluir · Esc: cancelar';
+  $('sHint').textContent = t === 'sel' ? 'clique/janela: selecionar (soma) · Shift: tirar · botão do meio: mover · Esc: limpar' : t === 'pt' ? 'clique: marcar coordenada · Esc: sair' : 'clique: ponto · Enter/duplo clique/botão direito: concluir · Esc: cancelar';
   if (t !== 'sel') showTab('med');
 }
 $('tools').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setTool(b.dataset.tool); });
 $('bSnap').onclick = () => { snapOn = !snapOn; $('bSnap').setAttribute('aria-pressed', String(snapOn)); };
 $('bFit').onclick = () => { if (SC) { fitBox(SC.fit); render(); drawOvl(); } };
-$('bBg').onclick = () => { white = !white; main.classList.toggle('white', white); try { localStorage.setItem('dwgv.bg', white ? 'w' : 'b'); } catch (_) {} if (SC) layersUI(); render(); drawOvl(); };
+$('bTheme').onclick = () => { theme = theme === 'light' ? 'dark' : 'light'; try { localStorage.setItem('dwgv.theme', theme); } catch (_) {} applyTheme(); if (SC) layersUI(); render(); drawOvl(); };
 function showTab(t) {
   for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', String(b.dataset.tab === t));
   for (const id of ['insp', 'med', 'conv']) $('tab-' + id).hidden = id !== t;
@@ -1059,7 +1146,9 @@ ovl.addEventListener('pointerdown', e => {
     const [a, b] = [...ptrs.values()];
     pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 }; drag = null; interacting = true; return;
   }
-  drag = { x: e.offsetX, y: e.offsetY, vx: view.x, vy: view.y, moved: false, btn: e.button, type: e.pointerType };
+  if (e.button === 1) e.preventDefault(); // sem a rolagem automática do navegador
+  const mode = (e.button === 1 || e.pointerType === 'touch') ? 'pan' : (e.button === 0 && tool === 'sel') ? 'box' : e.button === 0 ? 'pan' : 'none';
+  drag = { x: e.offsetX, y: e.offsetY, vx: view.x, vy: view.y, moved: false, btn: e.button, type: e.pointerType, mode, shift: e.shiftKey };
 });
 ovl.addEventListener('pointermove', e => {
   if (!SC) return;
@@ -1073,8 +1162,9 @@ ovl.addEventListener('pointermove', e => {
   }
   if (drag) {
     const dx = e.offsetX - drag.x, dy = e.offsetY - drag.y;
-    if (!drag.moved && Math.hypot(dx, dy) > (drag.type === 'touch' ? 8 : 4)) { drag.moved = true; interacting = true; ovl.classList.add('grab'); }
-    if (drag.moved) { view.x = drag.vx - dx / view.s; view.y = drag.vy + dy / view.s; schedule(); return; }
+    if (!drag.moved && Math.hypot(dx, dy) > (drag.type === 'touch' ? 8 : 4)) { drag.moved = true; if (drag.mode === 'pan') { interacting = true; ovl.classList.add('grab'); } }
+    if (drag.moved && drag.mode === 'pan') { view.x = drag.vx - dx / view.s; view.y = drag.vy + dy / view.s; schedule(); return; }
+    if (drag.moved && drag.mode === 'box') { box = { x0: drag.x, y0: drag.y, x1: e.offsetX, y1: e.offsetY }; drawOvl(); return; }
   }
   cur = locate(e.offsetX, e.offsetY);
   $('sX').textContent = fmt(absX(cur.x)); $('sY').textContent = fmt(absY(cur.y));
@@ -1086,13 +1176,19 @@ function endPtr(e) {
   if (pinch) { if (ptrs.size < 2) { pinch = null; drag = null; interacting = false; render(); drawOvl(); } return; }
   const d = drag; drag = null; ovl.classList.remove('grab');
   if (!d) return;
+  if (d.moved && d.mode === 'box') { const b = box; box = null; if (b) boxSelect(b, !d.shift, d.shift); else drawOvl(); return; }
   if (d.moved) { interacting = false; render(); drawOvl(); return; }
   if (e.type === 'pointercancel') return;
   if (d.btn === 2) { finish(); return; }
   if (d.btn === 1) return;
   const p = locate(e.offsetX, e.offsetY);
   const now = performance.now(), dbl = now - lastTap.t < 350 && Math.hypot(e.offsetX - lastTap.x, e.offsetY - lastTap.y) < 6; lastTap = { t: now, x: e.offsetX, y: e.offsetY };
-  if (tool === 'sel') { select(pickEntity(e.offsetX, e.offsetY)); return; }
+  if (tool === 'sel') {
+    const hit = pickEntity(e.offsetX, e.offsetY);
+    if (hit < 0) { if (!d.shift && sel.size) select(-1); return; }
+    if (d.shift) { if (sel.has(hit)) sel.delete(hit); else sel.add(hit); } else sel.add(hit); // clique soma; Shift tira
+    selChanged(); return;
+  }
   if (tool === 'pt') { addMeasure('pt', [[p.x, p.y]]); return; }
   if (dbl && pts.length) { finish(); return; }
   pts.push([p.x, p.y]); cur = p; hudUpdate(); drawOvl();
@@ -1101,6 +1197,7 @@ ovl.addEventListener('pointerup', endPtr);
 ovl.addEventListener('pointercancel', endPtr);
 ovl.addEventListener('pointerleave', () => { if (!drag) { cur = null; $('sSnap').textContent = ''; drawOvl(); } });
 ovl.addEventListener('contextmenu', e => e.preventDefault());
+ovl.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); }); // evita a rolagem automática do botão do meio
 ovl.addEventListener('wheel', e => {
   if (!SC) return; e.preventDefault();
   interacting = true; clearTimeout(idleT); idleT = setTimeout(() => { interacting = false; render(); drawOvl(); }, 160);
