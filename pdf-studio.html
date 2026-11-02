@@ -503,6 +503,13 @@ function fillImg(img,d,src){
 const io=new IntersectionObserver(es=>{
   es.forEach(e=>{ if(!e.isIntersecting) return; io.unobserve(e.target); const d=cur(); if(d) fillImg(e.target,d,+e.target.dataset.src); });
 },{rootMargin:'400px 0px'});
+// reserva para o IntersectionObserver (que não dispara com a janela encoberta): confere a posição na rolagem
+function lazyCheck(){
+  const d=cur(); if(!d) return; const h=window.innerHeight;
+  pgrid.querySelectorAll('img[data-src]:not([src])').forEach(img=>{ const r=img.parentNode.getBoundingClientRect(); if(r.bottom>-400&&r.top<h+400){ io.unobserve(img); fillImg(img,d,+img.dataset.src); } });
+}
+let lazyT=0; const lazySoon=()=>{ clearTimeout(lazyT); lazyT=setTimeout(lazyCheck,150); };
+window.addEventListener('scroll',lazySoon,{passive:true}); window.addEventListener('resize',lazySoon);
 function disposeDoc(d){
   d.dead=true;
   d.thumbs.forEach(p=>p.then(u=>URL.revokeObjectURL(u),()=>{}));
@@ -682,6 +689,7 @@ function renderPages(keepFocus){
     </div>`;
   }).join('')||'<p class="empty" style="grid-column:1/-1">Todas as páginas foram removidas. Use Desfazer ou Restaurar original.</p>';
   pgrid.querySelectorAll('img[data-src]').forEach(img=>{ if(!d.ready.has(+img.dataset.src)) io.observe(img); else fillImg(img,d,+img.dataset.src); });
+  lazySoon();
   const n=S.sel.size;
   $('selInfo').textContent=`${n} selecionada${n===1?'':'s'} · ${d.pages.length} de ${d.numPages} pág.`;
   document.querySelectorAll('#pagesSec [data-need="sel"]').forEach(b=>b.disabled=!n);
