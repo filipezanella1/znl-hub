@@ -117,7 +117,11 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
       <label class="fld" style="flex:1 1 320px">Destaques do mês <small style="text-transform:none;letter-spacing:0">(opcional, um por linha; em branco = gerados pelo retigráfico)</small><textarea id="destaques" placeholder="Liberados 1,4 km de base para CBUQ&#10;Galeria celular da est. 236 concluída"></textarea></label>
       <label class="fld" style="flex:1 1 320px">Próximos passos <small style="text-transform:none;letter-spacing:0">(opcional, um por linha; entra no resumo executivo)</small><textarea id="proximos" placeholder="Iniciar CBUQ no segmento 400–510&#10;Concluir a sinalização até a est. 300"></textarea></label>
     </div>
-    <label style="display:inline-flex;gap:8px;align-items:center;font:500 12.5px var(--mono);color:var(--dim);cursor:pointer"><input id="realce" type="checkbox" checked> Realçar fotos (contraste e cor automáticos)</label>
+    <div class="row" style="align-items:center">
+      <label class="fld" style="flex:0 0 300px">Qualidade das fotos<select id="qualidade"><option value="alta" selected>Alta: nitidez + resolução (recomendado)</option><option value="padrao">Padrão: original, arquivo menor</option></select></label>
+      <label style="display:inline-flex;gap:8px;align-items:center;font:500 12.5px var(--mono);color:var(--dim);cursor:pointer"><input id="realce" type="checkbox" checked> Realçar cor e contraste</label>
+    </div>
+    <p class="hint">Na qualidade alta, as fotos entram na resolução original (sem perder qualidade na compressão), as pequenas, como as de WhatsApp, são ampliadas para o tamanho do slide, e todas recebem nitidez. O PPTX fica maior (cerca de 1 MB por foto).</p>
     <p class="hist" id="hist"></p>
   </section>
 
@@ -269,25 +273,61 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
 
   // ---------------- imagens
   function carregarImg(src) { return new Promise((ok, err) => { const im = new Image(); im.onload = () => ok(im); im.onerror = err; im.src = src; }); }
+  // guarda o arquivo original (sem recomprimir) e uma miniatura leve para a tela
   async function reduzir(file) {
     let bmp;
     try { bmp = await createImageBitmap(file, { imageOrientation: "from-image" }); }
     catch { bmp = await carregarImg(URL.createObjectURL(file)); }
-    const max = 1800, k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-    const w = Math.round(bmp.width * k), h = Math.round(bmp.height * k);
-    const c = document.createElement("canvas"); c.width = w; c.height = h;
-    c.getContext("2d").drawImage(bmp, 0, 0, w, h);
-    return { data: c.toDataURL("image/jpeg", 0.86), w, h };
+    const w = bmp.width, h = bmp.height, k = Math.min(1, 480 / Math.max(w, h));
+    const c = document.createElement("canvas"); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    const ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    return { blob: file, thumb: c.toDataURL("image/jpeg", 0.8), w, h };
   }
-  async function crop(f, ar) {
-    const im = await carregarImg(f.data);
-    let w = im.naturalWidth, h = im.naturalHeight;
-    if (w / h > ar) w = Math.round(h * ar); else h = Math.round(w / ar);
-    const c = document.createElement("canvas"); c.width = w; c.height = h;
-    const ctx = c.getContext("2d");
-    ctx.drawImage(im, (im.naturalWidth - w) / 2, (im.naturalHeight - h) / 2, w, h, 0, 0, w, h);
-    if ($("#realce").checked) realcar(ctx, w, h);
-    return c.toDataURL("image/jpeg", 0.85);
+  async function fonte(f) {
+    if (f.blob) { try { return await createImageBitmap(f.blob, { imageOrientation: "from-image" }); } catch { return await carregarImg(URL.createObjectURL(f.blob)); } }
+    return await carregarImg(f.data);   // rascunhos antigos
+  }
+  // recorta no quadro do slide. Qualidade "alta": amplia fotos pequenas até ~220 dpi no tamanho do quadro e aplica nitidez
+  async function crop(f, ar, boxIn) {
+    const im = await fonte(f);
+    const sw = im.naturalWidth || im.width, sh = im.naturalHeight || im.height;
+    let cw = sw, ch = sh;
+    if (cw / ch > ar) cw = Math.round(ch * ar); else ch = Math.round(cw / ar);
+    const alta = $("#qualidade").value === "alta", box = boxIn || 13.333;
+    let ow = Math.min(cw, Math.round(box * 300));                      // nunca mais que 300 dpi
+    if (alta) ow = Math.max(ow, Math.min(Math.round(box * 220), cw * 2)); // amplia até 220 dpi (no máximo 2×)
+    const oh = Math.round(ow / ar);
+    let c = document.createElement("canvas"); c.width = cw; c.height = ch;
+    let ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(im, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, cw, ch);
+    // amplia/reduz em passos de até 1,5× para não borrar
+    while (c.width !== ow) {
+      const nw = c.width < ow ? Math.min(ow, Math.round(c.width * 1.5)) : Math.max(ow, Math.round(c.width / 1.5));
+      const n = document.createElement("canvas"); n.width = nw; n.height = Math.round(nw / ar);
+      const nx = n.getContext("2d"); nx.imageSmoothingQuality = "high"; nx.drawImage(c, 0, 0, n.width, n.height);
+      c = n; ctx = nx;
+    }
+    if (c.height !== oh) { const n = document.createElement("canvas"); n.width = ow; n.height = oh; n.getContext("2d").drawImage(c, 0, 0, ow, oh); c = n; ctx = n.getContext("2d"); }
+    if ($("#realce").checked) realcar(ctx, c.width, c.height);
+    if (alta) nitidez(ctx, c.width, c.height, ow > cw * 1.2 ? 0.9 : 0.55);
+    return c.toDataURL("image/jpeg", alta ? 0.93 : 0.9);
+  }
+  // máscara de nitidez (unsharp mask) com desfoque 3×3; limiar baixo evita realçar ruído
+  function nitidez(ctx, w, h, amt) {
+    const img = ctx.getImageData(0, 0, w, h), d = img.data, t = new Uint8ClampedArray(d.length), b = new Uint8ClampedArray(d.length), row = w * 4;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * row + x * 4, l = x ? i - 4 : i, r = x < w - 1 ? i + 4 : i;
+      t[i] = (d[l] + d[i] + d[r]) / 3; t[i + 1] = (d[l + 1] + d[i + 1] + d[r + 1]) / 3; t[i + 2] = (d[l + 2] + d[i + 2] + d[r + 2]) / 3;
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * row + x * 4, u = y ? i - row : i, o = y < h - 1 ? i + row : i;
+      b[i] = (t[u] + t[i] + t[o]) / 3; b[i + 1] = (t[u + 1] + t[i + 1] + t[o + 1]) / 3; b[i + 2] = (t[u + 2] + t[i + 2] + t[o + 2]) / 3;
+    }
+    for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) {
+      const diff = d[i + k] - b[i + k];
+      if (diff > 2 || diff < -2) d[i + k] = d[i + k] + amt * diff;
+    }
+    ctx.putImageData(img, 0, 0);
   }
   // realce: estica o contraste pelos percentis 1–99 da luminância e aviva um pouco a cor (fotos de WhatsApp vêm lavadas)
   function realcar(ctx, w, h) {
@@ -315,7 +355,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
   function dbPut(v) { try { if (DB.db) DB.db.transaction("s", "readwrite").objectStore("s").put(v, "rascunho"); } catch { } }
   function dbGet() { return new Promise(ok => { try { if (!DB.db) return ok(null); const r = DB.db.transaction("s").objectStore("s").get("rascunho"); r.onsuccess = () => ok(r.result || null); r.onerror = () => ok(null); } catch { ok(null); } }); }
   let saveT = 0;
-  const salvar = () => { clearTimeout(saveT); saveT = setTimeout(() => dbPut({ fotos, num: $("#num").value, mes: $("#mes").value, destaques: $("#destaques").value, proximos: $("#proximos").value, realce: $("#realce").checked }), 400); };
+  const salvar = () => { clearTimeout(saveT); saveT = setTimeout(() => dbPut({ fotos, num: $("#num").value, mes: $("#mes").value, destaques: $("#destaques").value, proximos: $("#proximos").value, realce: $("#realce").checked, qualidade: $("#qualidade").value }), 400); };
 
   // ---------------- render
   function render() {
@@ -327,7 +367,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
       const opts = ORDEM.map(d => `<option ${d === f.disc ? "selected" : ""}>${d}</option>`).join("");
       const info = [f.nome, f.gps ? (f.gpsOff > 300 ? `<em>GPS a ${Math.round(f.gpsOff)} m do eixo</em>` : "GPS") : ""].filter(Boolean).join(" · ");
       return `<article class="card" data-i="${i}">
-        <div class="im" draggable="true" title="Arraste para mudar a ordem"><img src="${f.data}" alt="Foto ${i + 1}"><span class="n">${i + 1}</span>${f.capa ? '<span class="star">capa</span>' : ""}</div>
+        <div class="im" draggable="true" title="Arraste para mudar a ordem"><img src="${f.thumb || f.data}" alt="Foto ${i + 1}"><span class="n">${i + 1}</span>${f.capa ? '<span class="star">capa</span>' : ""}</div>
         <div class="f">
           <select data-k="disc" aria-label="Disciplina da foto ${i + 1}" style="border-left:6px solid #${DISC[f.disc]}">${opts}</select>
           <textarea data-k="desc" aria-label="Descrição da foto ${i + 1}" placeholder="Descrição (opcional)">${esc(f.desc)}</textarea>
@@ -471,7 +511,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
       if (!MAPA) MAPA = await asDataURL("rf/localizacao.png");
       bar.style.width = "35%";
       let feitos = 0; const total = fotos.length * 1.2 + 2;
-      const cropP = async (f, ar) => { const r = await crop(f, ar); feitos++; bar.style.width = Math.min(90, 35 + 55 * feitos / total) + "%"; return r; };
+      const cropP = async (f, ar, box) => { const r = await crop(f, ar, box); feitos++; bar.style.width = Math.min(90, 35 + 55 * feitos / total) + "%"; return r; };
       const pres = await G.gerar({ PptxGenJS: window.PptxGenJS, cfg: { num, mesLongo: mi.longo, mesCurto: mi.curto }, fotos, av: AV, logo: LOGO, mapa: MAPA, crop: cropP,
         destaques: $("#destaques").value, proximos: $("#proximos").value, anterior: anteriorDe(Number(num)) });
       const nome = `RF-${num}_PR-990_${mi.longo.replace(/ de /, "-").replace(/\s+/g, "-")}.pptx`;
@@ -538,7 +578,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
   (async () => {
     const hoje = new Date(); hoje.setDate(1); hoje.setMonth(hoje.getMonth() - (new Date().getDate() < 15 ? 1 : 0));
     $("#mes").value = hoje.toISOString().slice(0, 7);
-    ["#num", "#mes", "#destaques", "#proximos", "#realce"].forEach(s => $(s).addEventListener("input", () => salvar()));
+    ["#num", "#mes", "#destaques", "#proximos", "#realce", "#qualidade"].forEach(s => $(s).addEventListener("input", () => salvar()));
     await dbOpen();
     const [ultimo, rasc] = await Promise.all([carregarHist(), dbGet(), carregarAv(),
       fetch("rf/eixo.json").then(r => r.json()).then(j => { EIXO = j; }).catch(() => { })]);
@@ -546,7 +586,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
     if (rasc && Array.isArray(rasc.fotos) && rasc.fotos.length) {
       fotos = rasc.fotos; if (rasc.num) $("#num").value = rasc.num; if (rasc.mes) $("#mes").value = rasc.mes;
     }
-    if (rasc) { $("#destaques").value = rasc.destaques || ""; $("#proximos").value = rasc.proximos || ""; if (rasc.realce === false) $("#realce").checked = false; }
+    if (rasc) { $("#destaques").value = rasc.destaques || ""; $("#proximos").value = rasc.proximos || ""; if (rasc.realce === false) $("#realce").checked = false; if (rasc.qualidade) $("#qualidade").value = rasc.qualidade; }
     render();
   })();
 })();

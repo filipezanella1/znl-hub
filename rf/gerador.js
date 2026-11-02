@@ -7,7 +7,7 @@
      fotos     : [{ data, w, h, disc, desc, est, lado, dataFoto, capa }] na ordem final
      av        : retigráfico (formato data/avanco.json do app PR990)
      logo,mapa : data URLs
-     crop      : async (foto, aspecto) → data URL recortada no aspecto (centro), já com realce se o chamador quiser
+     crop      : async (foto, aspecto, larguraPol) → data URL recortada no aspecto (centro); larguraPol = largura do quadro em polegadas, para o chamador escolher a resolução
      destaques : texto livre, uma linha por destaque (opcional; sem ele os destaques saem do retigráfico)
      proximos  : texto livre, uma linha por item (opcional; entra no resumo executivo)
      anterior  : { num, data, pc: { [nome da frente]: % } } do relatório anterior (opcional; mostra o avanço no mês)
@@ -142,7 +142,7 @@
     {
       const s = pres.addSlide({ masterName: "CAPA", sectionTitle: "Capa" });
       const ci = Math.max(0, fotos.findIndex(f => f.capa));
-      if (fotos.length) s.addImage({ data: strip(await crop(fotos[ci], W / H)), x: 0, y: 0, w: W, h: H, altText: "Foto de destaque do mês" });
+      if (fotos.length) s.addImage({ data: strip(await crop(fotos[ci], W / H, W)), x: 0, y: 0, w: W, h: H, altText: "Foto de destaque do mês" });
       s.addShape(pres.shapes.RECTANGLE, { x: 0, y: 0, w: 5.9, h: H, fill: { color: C.verdeEsc, transparency: 6 }, line: { type: "none" } });
       const L = 0.75, TW = 4.6;
       s.addShape(pres.shapes.RECTANGLE, { x: L, y: 0.7, w: 0.86, h: 1.22, fill: { color: C.branco }, line: { type: "none" } });
@@ -321,7 +321,7 @@
         // foto sozinha: ocupa o slide inteiro; legenda num cartão branco
         const i = p.idx[0], f = fotos[i];
         const s = pres.addSlide({ masterName: "FOTO", sectionTitle: "Fotos" });
-        s.addImage({ data: strip(await crop(f, W / H)), x: 0, y: 0, w: W, h: H, altText: `Foto ${i + 1}` });
+        s.addImage({ data: strip(await crop(f, W / H, W)), x: 0, y: 0, w: W, h: H, altText: `Foto ${i + 1}` });
         chip(s, p.disc, cor, M, 0.5);
         const m = meta(f), cw = (f.desc || m) ? 5.9 : 1.5, chh = m ? 1.05 : 0.8;
         s.addShape(pres.shapes.RECTANGLE, { x: M, y: H - M - chh, w: cw, h: chh, fill: { color: C.branco }, line: { type: "none" }, shadow: { type: "outer", color: "000000", opacity: 0.25, blur: 8, offset: 2, angle: 90 } });
@@ -335,14 +335,14 @@
         const g = 0.3, w = (CW - g) / 2, h = w / 1.5;
         for (const [k, i] of p.idx.entries()) {
           const x = M + k * (w + g);
-          s.addImage({ data: strip(await crop(fotos[i], w / h)), x, y: TOP, w, h, altText: `Foto ${i + 1}` });
+          s.addImage({ data: strip(await crop(fotos[i], w / h, w)), x, y: TOP, w, h, altText: `Foto ${i + 1}` });
           legenda(s, i, x, TOP + h + 0.12, w);
         }
       } else {
         const g = 0.3, n = p.idx.length, h = BOT - TOP - 0.7, w = Math.min((CW - g * (n - 1)) / n, h * 0.75), x0 = M + (CW - (w * n + g * (n - 1))) / 2;
         for (const [k, i] of p.idx.entries()) {
           const x = x0 + k * (w + g);
-          s.addImage({ data: strip(await crop(fotos[i], w / h)), x, y: TOP, w, h, altText: `Foto ${i + 1}` });
+          s.addImage({ data: strip(await crop(fotos[i], w / h, w)), x, y: TOP, w, h, altText: `Foto ${i + 1}` });
           legenda(s, i, x, TOP + h + 0.12, Math.max(w, 3));
         }
       }
