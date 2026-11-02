@@ -233,7 +233,11 @@ export default {
         const rel = {
           num, mes: s(r.mes, 40), ym: s(r.ym, 7), em: new Date().toISOString(),
           fotos: r.fotos.map((f, i) => ({ n: i + 1, disc: s(f.disc, 40), desc: s(f.desc, 300),
-            est: Number.isFinite(f.est) ? f.est : null, lado: s(f.lado, 4), data: s(f.data, 10) }))
+            est: Number.isFinite(f.est) ? f.est : null, lado: s(f.lado, 4), data: s(f.data, 10) })),
+          avanco: r.avanco && typeof r.avanco === "object" && r.avanco.pc && typeof r.avanco.pc === "object"
+            ? { data: s(r.avanco.data, 10), pc: Object.fromEntries(Object.entries(r.avanco.pc).slice(0, 30)
+                .filter(([, v]) => Number.isFinite(v)).map(([k, v]) => [String(k).slice(0, 60), v])) }
+            : null
         };
         hist.relatorios = hist.relatorios.filter(x => x.num !== num).concat(rel).sort((a, b) => a.num - b.num).slice(-60);
         await env.HUB_KV.put(KEY, JSON.stringify(hist));
