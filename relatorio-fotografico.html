@@ -103,7 +103,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
   <header>
     <div class="prompt"><a href="/">znl-hub</a> / <b>relatorio-fotografico</b></div>
     <h1>Relatório <span>Fotográfico</span> PR-990</h1>
-    <p class="lead">Arraste as fotos do mês, escreva uma linha por foto e gere o PPTX no padrão TCE: capa, resumo executivo, localização, avanço pelo retigráfico, linear com as fotos, fotos por disciplina e anexo. Tudo é montado neste aparelho; as fotos não saem dele.</p>
+    <p class="lead">Arraste as fotos do mês, escreva uma linha por foto e gere o PPTX no padrão TCE: capa, localização, resumo executivo, avanço pelo retigráfico, linear com as fotos, fotos por disciplina e anexo. Tudo é montado neste aparelho; as fotos não saem dele.</p>
   </header>
 
   <section class="panel" aria-labelledby="h-dados">
@@ -356,7 +356,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
     $("#stS").textContent = 5 + plano.length + nIdx;
     const nomes = { inteira: "foto em tela cheia", dois: "2 fotos", retratos: "fotos em pé", retrato: "1 foto em pé" };
     let s = 6, foto = 1;
-    $("#plan").innerHTML = `<li><b>1–5</b> capa · resumo executivo · localização · avanço físico · diagrama linear</li>` + plano.map(p => {
+    $("#plan").innerHTML = `<li><b>1–5</b> capa · localização · resumo executivo · avanço físico · diagrama linear</li>` + plano.map(p => {
       const a = foto, b = foto + p.idx.length - 1; foto = b + 1;
       return `<li><b>${s++}</b> <span class="chip" style="background:#${DISC[p.disc]}"></span>${esc(p.disc)} · ${nomes[p.tipo]} · foto${a === b ? " " + a : "s " + a + "–" + b}</li>`;
     }).join("") + `<li><b>${s}${nIdx > 1 ? "–" + (s + nIdx - 1) : ""}</b> anexo: registro das fotos</li>`;

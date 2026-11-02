@@ -133,7 +133,7 @@
 
     const plano = planejar(fotos);
     const temProx = linhas(proximos).length > 0;
-    const PRIMEIRA_FOTO = 6; // capa, resumo, localização, avanço, linear
+    const PRIMEIRA_FOTO = 6; // capa, localização, resumo, avanço, linear
     const slideDe = [];
     plano.forEach((p, k) => p.idx.forEach(i => { slideDe[i] = PRIMEIRA_FOTO + k; }));
 
@@ -156,11 +156,26 @@
       s.addText("TCE Engenharia · Obra 515 · Contrato CO 050/2024 DER/DT · DER-PR", { x: L, y: 6.35, w: TW, h: 0.5, fontSize: 10.5, color: C.verdeClaro, margin: 0, isTextBox: true, valign: "top" });
     }
 
-    // ================= 2 RESUMO EXECUTIVO
-    pres.addSection({ title: "Resumo" });
+    // ================= 2 LOCALIZAÇÃO
+    pres.addSection({ title: "Obra" });
     {
-      const titulo = cbuq ? `Revestimento em ${Math.round(pcFrente(cbuq))}% do trecho; faltam ${nf1(kmFalta(cbuq))} km de CBUQ` : "Resumo do mês";
-      const s = conteudo("Resumo", titulo, "Resumo executivo", C.verde);
+      const s = conteudo("Obra", "12,9 km de rodovia nova entre a PR-364 e Rebouças", "Localização", C.verde);
+      const mh = CW * 858 / 3153;
+      s.addImage({ data: strip(mapa), x: M, y: TOP - 0.05, w: CW, h: mh, altText: "Localização: Brasil, Paraná, município de Rebouças e trecho da PR-990" });
+      const rows = [["Rodovia", "PR-990 – implantação"], ["Trecho", "PR-364 – Cidade de Rebouças"], ["Segmento", "km 0+000 a 12+883,96"],
+        ["Contrato", "CO 050/2024 DER/DT"], ["Contratada", "TCE Engenharia Ltda."], ["OAE", "Ponte s/ Rio do Salto (235+6 a 237+1)"]];
+      const fy = TOP + mh + 0.2, c3 = (CW - 0.6) / 3, rh = 0.62;
+      rows.forEach(([k, v], i) => s.addText([
+        { text: k.toUpperCase(), options: { fontSize: 9.5, color: C.texto2, bold: true, charSpacing: 1, breakLine: true } },
+        { text: v, options: { fontSize: 14, color: C.tinta } },
+      ], { x: M + (i % 3) * (c3 + 0.3), y: fy + Math.floor(i / 3) * rh, w: c3, h: rh, margin: 0, valign: "top", isTextBox: true }));
+    }
+
+    // ================= 3 RESUMO EXECUTIVO
+    pres.addSection({ title: "Situação" });
+    {
+      const titulo = cbuq ? `CBUQ em ${Math.round(pcFrente(cbuq))}% do trecho; faltam ${nf1(kmFalta(cbuq))} km` : "Resumo do mês";
+      const s = conteudo("Situação", titulo, "Resumo executivo", C.verde);
       const kpis = [];
       if (cbuq) kpis.push([`${Math.round(pcFrente(cbuq))}%`, "CBUQ executado", delta(cbuq) || `faltam ${nf1(kmFalta(cbuq))} km`]);
       if (bgs) kpis.push([`${Math.round(pcFrente(bgs))}%`, "Base BGS executada", delta(bgs) || `faltam ${nf1(kmFalta(bgs))} km`]);
@@ -180,7 +195,7 @@
       let dest = linhas(destaques);
       if (!dest.length) {
         if (cbuq) dest.push(`CBUQ executado em ${nf1(pcFrente(cbuq))}% das estacas do trecho executável; faltam ${nf1(kmFalta(cbuq))} km.`);
-        if (bgs && cbuq) dest.push(`Base BGS à frente do revestimento: ${nf1(pcFrente(bgs))}% executada, liberando ${nf1(Math.max(0, (pcFrente(bgs) - pcFrente(cbuq)) * EXEC * 20 / 100 / 1000))} km para CBUQ.`);
+        if (bgs && cbuq) dest.push(`BGS à frente do CBUQ: ${nf1(pcFrente(bgs))}% executada, liberando ${nf1(Math.max(0, (pcFrente(bgs) - pcFrente(cbuq)) * EXEC * 20 / 100 / 1000))} km para CBUQ.`);
         if (terr) dest.push(`Terraplenagem ${nf1(pcFrente(terr))}% concluída e ${nf1(paFrente(terr))}% em andamento.`);
         if (oac.length) dest.push(`${oacOk} de ${oac.length} bueiros e galerias concluídos.`);
       }
@@ -198,25 +213,10 @@
       }
     }
 
-    // ================= 3 LOCALIZAÇÃO
-    pres.addSection({ title: "Obra" });
-    {
-      const s = conteudo("Obra", "12,9 km de rodovia nova entre a PR-364 e Rebouças", "Localização", C.verde);
-      const mh = CW * 858 / 3153;
-      s.addImage({ data: strip(mapa), x: M, y: TOP - 0.05, w: CW, h: mh, altText: "Localização: Brasil, Paraná, município de Rebouças e trecho da PR-990" });
-      const rows = [["Rodovia", "PR-990 – implantação"], ["Trecho", "PR-364 – Cidade de Rebouças"], ["Segmento", "km 0+000 a 12+883,96"],
-        ["Contrato", "CO 050/2024 DER/DT"], ["Contratada", "TCE Engenharia Ltda."], ["OAE", "Ponte s/ Rio do Salto (235+6 a 237+1)"]];
-      const fy = TOP + mh + 0.2, c3 = (CW - 0.6) / 3, rh = 0.62;
-      rows.forEach(([k, v], i) => s.addText([
-        { text: k.toUpperCase(), options: { fontSize: 9.5, color: C.texto2, bold: true, charSpacing: 1, breakLine: true } },
-        { text: v, options: { fontSize: 14, color: C.tinta } },
-      ], { x: M + (i % 3) * (c3 + 0.3), y: fy + Math.floor(i / 3) * rh, w: c3, h: rh, margin: 0, valign: "top", isTextBox: true }));
-    }
-
     // ================= 4 AVANÇO POR FRENTE (barras desenhadas: concluído | em andamento | a executar)
     if (frentes.length) {
-      const titulo = cbuq && bgs ? `Base pronta em ${Math.round(pcFrente(bgs))}% e revestimento em ${Math.round(pcFrente(cbuq))}% do trecho` : `Avanço físico até ${dataAv}`;
-      const s = conteudo("Obra", titulo, "Avanço físico", C.verde, { loc: `retigráfico de ${dataAv}` });
+      const titulo = cbuq && bgs ? `BGS pronta em ${Math.round(pcFrente(bgs))}% e CBUQ em ${Math.round(pcFrente(cbuq))}% do trecho` : `Avanço físico até ${dataAv}`;
+      const s = conteudo("Situação", titulo, "Avanço físico", C.verde, { loc: `retigráfico de ${dataAv}` });
       const LX = M + 1.75, BW = 6.0, rh = (BOT - TOP - 0.55) / frentes.length, bh = Math.min(0.34, rh * 0.62);
       frentes.forEach((f, i) => {
         const y = TOP + 0.1 + i * rh, pc = pcFrente(f), pa = paFrente(f), dest = /CBUQ/i.test(f.n);
@@ -251,7 +251,7 @@
 
     // ================= 5 LINEAR com as fotos
     if (frentes.length) {
-      const s = conteudo("Obra", "Onde estamos na obra e onde foram tiradas as fotos", "Diagrama linear", C.verde, { loc: `retigráfico de ${dataAv}` });
+      const s = conteudo("Situação", "Onde estamos na obra e onde foram tiradas as fotos", "Diagrama linear", C.verde, { loc: `retigráfico de ${dataAv}` });
       const END = EXEC, LX = 2.25, RX = W - M, LW = RX - LX, X = e => LX + (Math.min(e, END) / END) * LW;
       const y0 = 3.2, rh = 0.34, bh = 0.25;
       (av.oae || []).forEach(o => {
