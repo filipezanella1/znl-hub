@@ -21,6 +21,8 @@ const DEFAULT_TOOLS = [
     desc: "Confere a parte diária dos basculantes terceiros (21 a 20) contra o Painel TCE e aponta alertas: grave, médio e avaliar.", tag: "app", status: "on" },
   { id: "relatorio-fotografico", name: "Relatório Fotográfico", url: "relatorio-fotografico.html",
     desc: "Relatório fotográfico mensal da PR-990: fotos + descrições viram PPTX no padrão TCE, com avanço, linear e índice.", tag: "app", status: "on" },
+  { id: "normas", name: "Normas Rodoviárias", url: "normas.html",
+    desc: "Busca nas especificações de serviço, ensaios e manuais do DNIT, DER-PR, DER-SP, DER-MG e SINFRA-MT, com link direto para o PDF oficial.", tag: "consulta", status: "on" },
   { id: "claude", name: "Claude", url: "https://claude.ai/new",
     desc: "Abre uma conversa com o Claude. No terminal: claude <seu pedido>.", tag: "assistente", status: "on" }
 ];
@@ -242,6 +244,22 @@ export default {
         hist.relatorios = hist.relatorios.filter(x => x.num !== num).concat(rel).sort((a, b) => a.num - b.num).slice(-60);
         await env.HUB_KV.put(KEY, JSON.stringify(hist));
         return json(hist);
+      }
+      return json({ error: "Método não permitido." }, 405);
+    }
+
+    if (path === "/api/normas") {
+      // normas favoritas (lista de links), iguais em todos os aparelhos
+      if (!authed) return json({ error: "Faça login." }, 401);
+      if (!env.HUB_KV) return json({ error: "Armazenamento HUB_KV não configurado." }, 500);
+      if (request.method === "GET") return json((await env.HUB_KV.get("normas:fav", "json")) || { favs: [] });
+      if (request.method === "PUT") {
+        let b;
+        try { b = await request.json(); } catch { return json({ error: "JSON inválido." }, 400); }
+        if (!b || !Array.isArray(b.favs) || b.favs.length > 2000) return json({ error: "Lista inválida." }, 400);
+        const favs = [...new Set(b.favs.filter(u => typeof u === "string" && /^https?:\/\//.test(u) && u.length <= 600))];
+        await env.HUB_KV.put("normas:fav", JSON.stringify({ favs }));
+        return json({ ok: true, count: favs.length });
       }
       return json({ error: "Método não permitido." }, 405);
     }

@@ -1,0 +1,44 @@
+# Atualiza o catálogo do módulo Normas toda segunda-feira (e quando disparado à mão).
+# Se uma fonte falhar, o coletor mantém os itens anteriores dela e registra o aviso no catálogo.
+name: Atualizar catálogo de normas
+on:
+  schedule:
+    - cron: "17 9 * * 1"   # segunda, 06:17 em Brasília
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependências
+        run: |
+          pip install requests beautifulsoup4 lxml playwright
+          python -m playwright install --with-deps chromium
+      - name: Coletar
+        run: python normas/coletor/coletar.py
+      - name: Publicar se mudou
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          novo = json.load(open("normas/catalogo.json"))
+          velho = json.loads(subprocess.run(["git", "show", "HEAD:normas/catalogo.json"], capture_output=True, text=True).stdout or "{}")
+          tira = lambda d: [{k: v for k, v in f.items() if k != "em"} for f in d.get("fontes", [])]
+          mudou = novo.get("itens") != velho.get("itens") or tira(novo) != tira(velho) or novo.get("avisos") != velho.get("avisos")
+          open("mudou", "w").write("1" if mudou else "")
+          PY
+          if [ -s mudou ]; then
+            git config user.name "znl-hub bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add normas/catalogo.json
+            git commit -m "Normas: catálogo atualizado ($(date -u +%Y-%m-%d))"
+            git push
+          else
+            echo "Sem mudanças no catálogo."
+          fi
+          rm -f mudou
