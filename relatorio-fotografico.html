@@ -81,6 +81,10 @@ input[type=file]{display:none}
 .ib:hover:not(:disabled){color:var(--fg);border-color:var(--dim)}
 .ib.on{border-color:var(--warn);color:var(--warn)}
 .ib.rm:hover{color:var(--bad);border-color:var(--bad)}
+.ia{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;border-top:1px dashed var(--line);padding-top:8px;font:12px var(--mono);color:var(--dim)}
+.ia img{width:72px;height:48px;object-fit:cover;border-radius:3px;box-shadow:0 0 0 1px var(--line)}
+.ia label{display:inline-flex;gap:6px;align-items:center;cursor:pointer;color:var(--fg)}
+.ia .tag{font:600 10px var(--mono);color:#1a1200;background:var(--warn);padding:1px 5px;border-radius:3px}
 .ib:disabled{opacity:.35;cursor:default}
 .chip{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
 .empty{margin:0;padding:18px 14px;color:var(--dim);font:13px var(--mono);border:1px dashed var(--line);border-radius:6px;text-align:center}
@@ -283,13 +287,15 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
     const ctx = c.getContext("2d"); ctx.imageSmoothingQuality = "high"; ctx.drawImage(bmp, 0, 0, c.width, c.height);
     return { blob: file, thumb: c.toDataURL("image/jpeg", 0.8), w, h };
   }
-  async function fonte(f) {
+  async function fonte(f, ia) {
+    if (ia) { try { return await createImageBitmap(f.ia); } catch { return await carregarImg(URL.createObjectURL(f.ia)); } }
     if (f.blob) { try { return await createImageBitmap(f.blob, { imageOrientation: "from-image" }); } catch { return await carregarImg(URL.createObjectURL(f.blob)); } }
     return await carregarImg(f.data);   // rascunhos antigos
   }
   // recorta no quadro do slide. Qualidade "alta": amplia fotos pequenas até ~220 dpi no tamanho do quadro e aplica nitidez
-  async function crop(f, ar, boxIn) {
-    const im = await fonte(f);
+  async function crop(f, ar, boxIn, opts) {
+    const usaIA = !!(opts && opts.capa && f.usarIA && f.ia);
+    const im = await fonte(f, usaIA);
     const sw = im.naturalWidth || im.width, sh = im.naturalHeight || im.height;
     let cw = sw, ch = sh;
     if (cw / ch > ar) cw = Math.round(ch * ar); else ch = Math.round(cw / ar);
@@ -308,9 +314,31 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
       c = n; ctx = nx;
     }
     if (c.height !== oh) { const n = document.createElement("canvas"); n.width = ow; n.height = oh; n.getContext("2d").drawImage(c, 0, 0, ow, oh); c = n; ctx = n.getContext("2d"); }
-    if ($("#realce").checked) realcar(ctx, c.width, c.height);
-    if (alta) nitidez(ctx, c.width, c.height, ow > cw * 1.2 ? 0.9 : 0.55);
+    if ($("#realce").checked && !usaIA) realcar(ctx, c.width, c.height);
+    if (alta && !usaIA) nitidez(ctx, c.width, c.height, ow > cw * 1.2 ? 0.9 : 0.55);
     return c.toDataURL("image/jpeg", alta ? 0.93 : 0.9);
+  }
+  // ProShot: recria a foto da capa com IA (OpenAI, via /api/proshot do hub). Só a capa usa a versão gerada.
+  async function proshot(f, btn) {
+    const msg = btn.parentElement.querySelector(".iamsg");
+    btn.disabled = true; msg.className = "iamsg"; msg.textContent = "gerando com IA… (até 1 minuto)";
+    try {
+      const im = await fonte(f, false);
+      const sw = im.naturalWidth || im.width, sh = im.naturalHeight || im.height, k = Math.min(1, 1536 / Math.max(sw, sh));
+      const c = document.createElement("canvas"); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+      const cx = c.getContext("2d"); cx.imageSmoothingQuality = "high"; cx.drawImage(im, 0, 0, c.width, c.height);
+      const r = await fetch("/api/proshot", { method: "POST", credentials: "same-origin", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ image: c.toDataURL("image/jpeg", 0.92), orient: sw >= sh ? "h" : "v" }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.image) throw new Error(j.error || `erro ${r.status}`);
+      f.ia = await (await fetch(j.image)).blob();
+      const t = await createImageBitmap(f.ia), s = Math.min(1, 300 / t.width), tc = document.createElement("canvas");
+      tc.width = Math.round(t.width * s); tc.height = Math.round(t.height * s); tc.getContext("2d").drawImage(t, 0, 0, tc.width, tc.height);
+      f.iaThumb = tc.toDataURL("image/jpeg", 0.8); f.usarIA = true;
+      render(); salvar();
+    } catch (err) {
+      btn.disabled = false; msg.className = "iamsg bad"; msg.textContent = "Não foi possível gerar: " + (err && err.message || err);
+    }
   }
   // máscara de nitidez (unsharp mask) com desfoque 3×3; limiar baixo evita realçar ruído
   function nitidez(ctx, w, h, amt) {
@@ -383,7 +411,10 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
           <button class="ib" data-a="down" ${i === fotos.length - 1 ? "disabled" : ""} aria-label="Descer">↓</button>
           <button class="ib ${f.capa ? "on" : ""}" data-a="capa" title="Usar como foto da capa">capa</button>
           <button class="ib rm" data-a="rm" aria-label="Remover foto ${i + 1}">✕</button>
-        </div></article>`;
+        </div>${f.capa ? `<div class="ia">
+          <button class="ib" data-a="proshot" title="Recria a foto da capa com IA, com aparência de câmera profissional. Só a capa usa essa versão.">${f.ia ? "Refazer ProShot" : "ProShot da capa (IA)"}</button>
+          ${f.ia ? `<img src="${f.iaThumb}" alt="Versão ProShot da foto ${i + 1}"><label><input type="checkbox" data-k="usarIA" ${f.usarIA ? "checked" : ""}> usar na capa</label><span class="tag">IA</span>` : `<span>só a capa usa a versão IA; a foto de registro continua original</span>`}
+          <span class="iamsg" aria-live="polite"></span></div>` : ""}</article>`;
     }).join("");
     resumo();
   }
@@ -415,10 +446,13 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
     else f[k] = e.target.value;
     resumo(); salvar();
   });
-  $("#grid").addEventListener("change", e => { if (e.target.dataset.k === "lado") { fotos[+e.target.closest(".card").dataset.i].lado = e.target.value; salvar(); } });
+  $("#grid").addEventListener("change", e => {
+    if (e.target.dataset.k === "usarIA") { fotos[+e.target.closest(".card").dataset.i].usarIA = e.target.checked; salvar(); return; }
+    if (e.target.dataset.k === "lado") { fotos[+e.target.closest(".card").dataset.i].lado = e.target.value; salvar(); } });
   $("#grid").addEventListener("click", e => {
     const b = e.target.closest("[data-a]"); if (!b) return;
     const i = +b.closest(".card").dataset.i, a = b.dataset.a;
+    if (a === "proshot") { proshot(fotos[i], b); return; }
     if (a === "up" && i > 0) [fotos[i - 1], fotos[i]] = [fotos[i], fotos[i - 1]];
     if (a === "down" && i < fotos.length - 1) [fotos[i + 1], fotos[i]] = [fotos[i], fotos[i + 1]];
     if (a === "capa") { const on = !fotos[i].capa; fotos.forEach(f => f.capa = false); fotos[i].capa = on; }
@@ -511,7 +545,7 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
       if (!MAPA) MAPA = await asDataURL("rf/localizacao.png");
       bar.style.width = "35%";
       let feitos = 0; const total = fotos.length * 1.2 + 2;
-      const cropP = async (f, ar, box) => { const r = await crop(f, ar, box); feitos++; bar.style.width = Math.min(90, 35 + 55 * feitos / total) + "%"; return r; };
+      const cropP = async (f, ar, box, opts) => { const r = await crop(f, ar, box, opts); feitos++; bar.style.width = Math.min(90, 35 + 55 * feitos / total) + "%"; return r; };
       const pres = await G.gerar({ PptxGenJS: window.PptxGenJS, cfg: { num, mesLongo: mi.longo, mesCurto: mi.curto }, fotos, av: AV, logo: LOGO, mapa: MAPA, crop: cropP,
         destaques: $("#destaques").value, proximos: $("#proximos").value, anterior: anteriorDe(Number(num)) });
       const nome = `RF-${num}_PR-990_${mi.longo.replace(/ de /, "-").replace(/\s+/g, "-")}.pptx`;
