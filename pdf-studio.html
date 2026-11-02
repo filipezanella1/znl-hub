@@ -86,6 +86,8 @@ input[type=file]{display:none}
 .th img:not([src]){visibility:hidden}
 .th .ld{position:absolute;font:500 10px var(--mono);color:var(--dim)}
 .th.sm{width:44px;flex:none}
+.imgarrow{color:var(--dim);font:600 13px var(--mono)}
+#imgSec .th img{background:repeating-conic-gradient(#e6e6e6 0 25%,#fff 0 50%) 0 0/10px 10px}
 .dmeta{flex:1 1 200px;min-width:0;display:grid;gap:1px}
 .dmeta strong{font:600 13.5px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dmeta small{color:var(--dim);font-size:12.5px}
@@ -176,16 +178,16 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
   <header>
     <div class="prompt"><a href="./" style="color:inherit;text-decoration:none" title="Voltar ao hub"><b>znl@hub</b></a>:~/pdf-studio$ merge</div>
     <h1>PDF <span>Studio</span></h1>
-    <p class="lead">Unir, organizar e reordenar arquivos PDF em uma única ferramenta. Importe os arquivos, escolha a ordem dos documentos, ajuste as páginas de cada um e gere um PDF só. Também serve para um único PDF: reorganizar, girar, recortar, remover, extrair ou dividir páginas, converter para SVG, editar os textos e inserir números de página ou marca d'água. Tudo é processado neste navegador; nenhum arquivo sai do seu computador.</p>
+    <p class="lead">Unir, organizar e reordenar arquivos PDF em uma única ferramenta. Importe os arquivos, escolha a ordem dos documentos, ajuste as páginas de cada um e gere um PDF só. Também serve para um único PDF: reorganizar, girar, recortar, remover, extrair ou dividir páginas, converter para SVG, editar os textos e inserir números de página ou marca d'água. E converte imagens JPG, JPEG e PNG em SVG. Tudo é processado neste navegador; nenhum arquivo sai do seu computador.</p>
   </header>
 
   <label class="drop" id="drop" for="file">
     <div class="t">
       <strong id="dropTitle">Arraste os PDFs aqui</strong>
-      <small id="dropSub">Selecione vários de uma vez. Pode adicionar mais depois: o que já foi organizado continua como está.</small>
+      <small id="dropSub">Selecione vários de uma vez. Pode adicionar mais depois: o que já foi organizado continua como está. Imagens JPG/PNG vão para a conversão em SVG.</small>
     </div>
     <span class="btn">Escolher PDFs</span>
-    <input type="file" id="file" accept=".pdf,application/pdf" multiple>
+    <input type="file" id="file" accept=".pdf,application/pdf,.jpg,.jpeg,.png,image/jpeg,image/png" multiple>
   </label>
 
   <section class="alert err" id="rejects" hidden aria-live="polite">
@@ -361,6 +363,34 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
     <p class="msg" id="msg" role="status" aria-live="polite"></p>
   </section>
 
+  <section class="sec" id="imgSec" aria-labelledby="imgTitle">
+    <div class="tablebar">
+      <h2 id="imgTitle">Imagens · JPG, JPEG e PNG para SVG</h2>
+      <button class="btn danger sm" type="button" id="imgClear" hidden>Limpar imagens</button>
+    </div>
+    <label class="drop" id="imgDrop" for="imgFile">
+      <div class="t">
+        <strong>Arraste imagens JPG, JPEG ou PNG aqui</strong>
+        <small>Pode escolher várias. A conversão roda neste navegador; as imagens não saem do seu computador.</small>
+      </div>
+      <span class="btn ghost">Escolher imagens</span>
+      <input type="file" id="imgFile" accept=".jpg,.jpeg,.png,image/jpeg,image/png" multiple>
+    </label>
+    <ul class="docs" id="imgList" hidden></ul>
+    <div class="out" id="imgOpts" hidden>
+      <div class="fform">
+        <label>Modo<select id="imgMode"><option value="trace">vetorizar (traçar as formas)</option><option value="embed">imagem dentro do SVG (sem perda)</option></select></label>
+        <label data-im="trace">Detalhe<select id="imgPreset"><option value="logo">logotipo / ícone (8 cores)</option><option value="ilus" selected>ilustração (16 cores)</option><option value="foto">foto (32 cores, arquivo grande)</option></select></label>
+        <label data-im="trace">Tamanho máx. para traçar (px)<input id="imgMax" type="text" inputmode="decimal" autocomplete="off" value="1200"></label>
+        <label class="chk" data-im="trace"><input type="checkbox" id="imgBg"> tirar fundo branco</label>
+      </div>
+      <p class="hint" id="imgHint">Vetorizar transforma a imagem em formas editáveis, que ficam nítidas em qualquer tamanho; funciona melhor com logotipos, desenhos e plantas. Fotos ficam com aparência de pintura e geram arquivos grandes; para fotos, prefira "imagem dentro do SVG".</p>
+      <div class="out-row"><button class="btn" type="button" id="imgGo">Converter e baixar SVG</button></div>
+      <div class="prog" id="imgProg" hidden><span id="imgProgBar"></span></div>
+      <p class="msg" id="imgMsg" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
   <footer>Os PDFs ficam só na memória desta aba: recarregar a página descarta o trabalho. Arquivos protegidos por senha ou criptografados precisam ter a proteção removida antes de importar.</footer>
 </div>
 
@@ -438,7 +468,10 @@ async function readPdf(f){
 }
 
 async function importFiles(list){
-  const files=[...list]; if(!files.length||S.busy) return;
+  let files=[...list]; if(!files.length||S.busy) return;
+  const imgs=files.filter(isImg); files=files.filter(f=>!isImg(f));
+  if(imgs.length) addImages(imgs);
+  if(!files.length) return;
   const rejected=[]; let added=0;
   setBusy(true);
   for(let i=0;i<files.length;i++){
@@ -1551,6 +1584,110 @@ $('prevBtn').addEventListener('click',async()=>{
     await page.render({canvasContext:cv.getContext('2d'),viewport:vp,intent:'print'}).promise; cv.hidden=false;
     say(`Prévia da página ${k} de ${flat.length} do arquivo final.`);
   }catch(e){ say('Não consegui gerar a prévia: '+(e&&e.message||e),'err'); }
+});
+
+// =====================================================================
+// Imagens (JPG, JPEG, PNG) → SVG
+// =====================================================================
+const IMG={items:[],seq:0,busy:false};
+function isImg(f){ return /\.(jpe?g|png)$/i.test(f.name)||/^image\/(jpeg|png)$/i.test(f.type); }
+function loadImage(url){ return new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=()=>rej(new Error('imagem corrompida ou em formato não suportado.')); im.src=url; }); }
+async function addImages(files){
+  const bad=[]; let n=0;
+  for(const f of files){
+    const url=URL.createObjectURL(f);
+    try{ const im=await loadImage(url); IMG.items.push({id:'i'+(++IMG.seq),name:f.name,size:f.size,file:f,url,w:im.naturalWidth,h:im.naturalHeight,png:/png$/i.test(f.type)||/\.png$/i.test(f.name),svg:null,svgUrl:null}); n++; }
+    catch(e){ URL.revokeObjectURL(url); bad.push(`${f.name}: ${e.message}`); }
+  }
+  renderImgs();
+  const m=$('imgMsg'); m.className='msg'+(bad.length?' warn':''); m.textContent=(n?`${n} imagem(ns) adicionada(s). `:'')+(bad.length?'Não abriram: '+bad.join('; '):'');
+  if(n&&!S.docs.length) $('imgSec').scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  else if(n) say(`${n} imagem(ns) enviada(s) para "Imagens · JPG, JPEG e PNG para SVG", mais abaixo.`);
+}
+function renderImgs(){
+  const L=$('imgList'), has=IMG.items.length;
+  L.hidden=!has; $('imgOpts').hidden=!has; $('imgClear').hidden=!has;
+  L.innerHTML=IMG.items.map(it=>`
+    <li class="doc" data-id="${it.id}" style="cursor:default">
+      <span class="th sm"><img alt="" draggable="false" src="${it.url}"></span>
+      ${it.svgUrl?`<span class="imgarrow">→</span><span class="th sm" title="Resultado em SVG"><img alt="" draggable="false" src="${it.svgUrl}"></span>`:''}
+      <div class="dmeta"><strong title="${esc(it.name)}">${esc(it.name)}</strong><small>${it.w}×${it.h} px · ${fmtSize(it.size)}${it.svg?` · <em>SVG pronto: ${fmtSize(it.svg.length)}</em>`:''}</small></div>
+      <div class="dact"><button class="ib rm" type="button" data-img-rm="${it.id}" aria-label="Remover ${esc(it.name)}">rm</button></div>
+    </li>`).join('');
+  syncImgOpts();
+}
+function syncImgOpts(){ const t=$('imgMode').value; document.querySelectorAll('#imgOpts [data-im]').forEach(el=>el.hidden=el.dataset.im!==t); $('imgHint').hidden=t!=='trace'; }
+$('imgMode').addEventListener('change',syncImgOpts);
+function dropImg(it){ URL.revokeObjectURL(it.url); if(it.svgUrl) URL.revokeObjectURL(it.svgUrl); }
+$('imgList').addEventListener('click',e=>{ const b=e.target.closest('[data-img-rm]'); if(!b||IMG.busy) return; const it=IMG.items.find(x=>x.id===b.dataset.imgRm); if(!it) return; dropImg(it); IMG.items=IMG.items.filter(x=>x!==it); renderImgs(); });
+$('imgClear').addEventListener('click',()=>{ if(IMG.busy) return; IMG.items.forEach(dropImg); IMG.items=[]; renderImgs(); $('imgMsg').textContent=''; });
+$('imgFile').addEventListener('change',()=>{ const fl=[...$('imgFile').files]; $('imgFile').value=''; const ok=fl.filter(isImg); if(ok.length) addImages(ok); if(ok.length<fl.length){ $('imgMsg').className='msg warn'; $('imgMsg').textContent='Só JPG, JPEG e PNG entram aqui; os outros arquivos foram ignorados.'; } });
+
+const TRACER_URLS=['https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.js','https://unpkg.com/imagetracerjs@1.2.6/imagetracer_v1.2.6.js'];
+let tracerW=null, tracerN=0;
+function tracer(){
+  if(tracerW) return tracerW;
+  const src=`let ok=false; for(const u of ${JSON.stringify(TRACER_URLS)}){ try{ importScripts(u); ok=true; break; }catch(e){} }
+onmessage=e=>{ if(!ok){ postMessage({id:e.data.id,err:'não consegui carregar o vetorizador (verifique a conexão).'}); return; }
+  try{ postMessage({id:e.data.id,svg:ImageTracer.imagedataToSVG(e.data.img,e.data.opt)}); }catch(err){ postMessage({id:e.data.id,err:String(err&&err.message||err)}); } };`;
+  tracerW=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})));
+  return tracerW;
+}
+function traceIn(img,opt){
+  return new Promise((res,rej)=>{
+    const w=tracer(), id=++tracerN;
+    const h=e=>{ if(e.data.id!==id) return; w.removeEventListener('message',h); e.data.err?rej(new Error(e.data.err)):res(e.data.svg); };
+    w.addEventListener('message',h);
+    w.onerror=e=>{ w.removeEventListener('message',h); try{ w.terminate(); }catch(_){} tracerW=null; rej(new Error(e.message||'falha no vetorizador.')); };
+    w.postMessage({id,img,opt});
+  });
+}
+const PRESETS={
+  logo:{numberofcolors:8,colorquantcycles:3,pathomit:8,blurradius:0,ltres:1,qtres:1},
+  ilus:{numberofcolors:16,colorquantcycles:3,pathomit:8,blurradius:0,ltres:1,qtres:1},
+  foto:{numberofcolors:32,colorquantcycles:2,pathomit:4,blurradius:2,blurdelta:20,ltres:1,qtres:1}
+};
+async function imgToSvg(it){
+  if($('imgMode').value==='embed'){
+    const data=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=()=>rej(new Error('não consegui ler a imagem.')); r.readAsDataURL(it.file); });
+    return SVG_HEAD+`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="${it.w}" height="${it.h}" viewBox="0 0 ${it.w} ${it.h}"><image width="${it.w}" height="${it.h}" xlink:href="${data}"/></svg>`;
+  }
+  const max=Math.max(100,Math.min(4000,Math.round(numIn('imgMax',1200,100,4000))));
+  const k=Math.min(1,max/Math.max(it.w,it.h)), W=Math.max(1,Math.round(it.w*k)), H=Math.max(1,Math.round(it.h*k));
+  const im=await loadImage(it.url); const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d'); ctx.imageSmoothingQuality='high'; ctx.drawImage(im,0,0,W,H);
+  const data=ctx.getImageData(0,0,W,H); cv.width=cv.height=0;
+  let svg=await traceIn(data,{...PRESETS[$('imgPreset').value]||PRESETS.ilus,viewbox:true,roundcoords:1});
+  if($('imgBg').checked) svg=svg.replace(/<path\b[^>]*fill="rgb\((\d+),(\d+),(\d+)\)"[^>]*\/>/g,(m,r,g,b)=>(+r>=235&&+g>=235&&+b>=235)?'':m);
+  svg=svg.replace(/^<svg\b/,`<svg width="${it.w}" height="${it.h}"`).replace(/\sdesc="[^"]*"/,'');
+  return SVG_HEAD+svg;
+}
+$('imgGo').addEventListener('click',async()=>{
+  if(IMG.busy||!IMG.items.length) return;
+  IMG.busy=true; $('imgGo').disabled=true; const m=$('imgMsg'); m.className='msg';
+  const fails=[], files=[];
+  try{
+    for(let i=0;i<IMG.items.length;i++){
+      const it=IMG.items[i];
+      $('imgProg').hidden=false; $('imgProgBar').style.width=Math.round(i/IMG.items.length*100)+'%';
+      m.textContent=`Convertendo ${i+1}/${IMG.items.length}: ${it.name}…`; await frame();
+      try{
+        const svg=await imgToSvg(it); it.svg=svg;
+        if(it.svgUrl) URL.revokeObjectURL(it.svgUrl); it.svgUrl=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+        files.push({name:it.name.replace(/\.(jpe?g|png)$/i,'')+'.svg',text:svg});
+      }catch(e){ fails.push(`${it.name}: ${e.message}`); }
+    }
+    $('imgProgBar').style.width='100%'; renderImgs();
+    if(files.length===1){ const blob=new Blob([files[0].text],{type:'image/svg+xml'}); saveBlob(blob,files[0].name); m.textContent=`Baixado: ${files[0].name} · ${fmtSize(blob.size)}.`; }
+    else if(files.length>1){
+      if(!window.JSZip) throw new Error('não consegui carregar o compactador (JSZip).');
+      const seen={}; const zip=new JSZip(); files.forEach(f=>{ let n=f.name; if(seen[n]){ n=n.replace(/\.svg$/,`_${++seen[n]}.svg`); } else seen[n]=1; zip.file(n,f.text); });
+      const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'}); saveBlob(blob,'imagens_svg.zip');
+      m.textContent=`Baixado: imagens_svg.zip · ${files.length} SVG · ${fmtSize(blob.size)}.`;
+    }
+    if(fails.length){ m.className='msg '+(files.length?'warn':'err'); m.textContent+=(m.textContent?' ':'')+'Falharam: '+fails.join('; '); }
+  }catch(e){ m.className='msg err'; m.textContent='Falha na conversão: '+(e&&e.message||e); }
+  finally{ IMG.busy=false; $('imgGo').disabled=false; setTimeout(()=>{ if(!IMG.busy) $('imgProg').hidden=true; },1200); }
 });
 
 // ---------- início ----------
