@@ -309,8 +309,8 @@ export default {
 
     const res = await env.ASSETS.fetch(request);
     const out = new Response(res.body, res);
-    // bibliotecas pesadas do DWG Viewer (WASM ~17 MB): guardadas no navegador por 1 dia
-    if (path.startsWith("/dwg/lib/")) out.headers.set("cache-control", "private, max-age=86400, stale-while-revalidate=604800");
+    // só os WASM do DWG Viewer (~17 MB) ficam guardados no navegador; os scripts sempre vêm atualizados
+    if (path.startsWith("/dwg/lib/") && path.endsWith(".wasm")) out.headers.set("cache-control", "private, max-age=86400, stale-while-revalidate=604800");
     else out.headers.set("cache-control", "no-store");
     out.headers.set("x-robots-tag", "noindex");
     return out;

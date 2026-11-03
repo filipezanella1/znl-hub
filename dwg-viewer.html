@@ -188,6 +188,7 @@ details.raw pre{font:11px/1.45 var(--mono);white-space:pre-wrap;overflow-wrap:an
 
   <main class="main" id="main">
     <canvas id="cv"></canvas>
+    <canvas id="scv" style="pointer-events:none"></canvas>
     <canvas id="ovl"></canvas>
     <div class="mhud" id="hud" hidden></div>
     <nav class="spaces" id="spaces" hidden></nav>
@@ -302,7 +303,8 @@ function busy(msg) { $('busy').hidden = !msg; if (msg) $('busyMsg').textContent 
 
 // ---------- estado ----------
 const app = $('app'), main = $('main'), cv = $('cv'), ovl = $('ovl');
-const ctx = cv.getContext('2d'), octx = ovl.getContext('2d');
+const scv = $('scv');
+const ctx = cv.getContext('2d'), octx = ovl.getContext('2d'), sctx = scv.getContext('2d');
 let SC = null;           // cena
 let MODEL = null;        // cena do model space (usada pelas viewports dos layouts)
 let FILE = null;         // { name, bytes, version }
@@ -423,7 +425,7 @@ function resize() {
   const r = main.getBoundingClientRect();
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   CW = r.width; CH = r.height;
-  for (const c of [cv, ovl]) { c.width = Math.max(1, Math.round(CW * dpr)); c.height = Math.max(1, Math.round(CH * dpr)); }
+  for (const c of [cv, scv, ovl]) { c.width = Math.max(1, Math.round(CW * dpr)); c.height = Math.max(1, Math.round(CH * dpr)); }
   render(); drawOvl();
 }
 new ResizeObserver(resize).observe(main);
@@ -470,6 +472,7 @@ function quickDraw() {
   const dx = (snapView.x - view.x) * view.s, dy = (view.y - snapView.y) * view.s;
   ctx.setTransform(k, 0, 0, k, (CW / 2 * (1 - k) + dx) * dpr, (CH / 2 * (1 - k) + dy) * dpr);
   ctx.drawImage(snapBmp, 0, 0);
+  drawSel(true);
 }
 function drawGeom(S, vis, lw) {
   ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
@@ -544,6 +547,7 @@ function render() {
   const vis = l => SC.vis[l];
   drawGeom(SC, vis, 1 / s);
   drawTexts(SC, vis, { a: s, b: 0, c: 0, d: -s, e: CW / 2 - view.x * s, f: CH / 2 + view.y * s, sc: s, rot: 0 });
+  drawSel(false);
   lastMs = performance.now() - t0;
   // instantâneo para interação fluida em desenhos pesados
   if (lastMs > 28) {
@@ -598,33 +602,58 @@ function drawTexts(S, vis, T) {
   }
 }
 
-// ---------- sobreposição (cursor, snap, medidas, seleção) ----------
+// ---------- seleção: camada própria, redesenhada só quando a vista ou a seleção mudam ----------
+// O contorno vai num Path2D em coordenadas do desenho, montado uma vez por seleção.
+// Entidades muito grandes (ex.: um XREF inteiro inserido como bloco) aparecem só pela caixa.
+const SEL_MAX_PTS = 150000;
+let selCache = null;
+function selGeometry() {
+  if (selCache && selCache.sc === SC && selCache.n === sel.size && selCache.v === selVersion) return selCache;
+  const g = SC.geo, I = SC.idx, path = new Path2D(), boxes = [], marks = [];
+  let budget = SEL_MAX_PTS;
+  const ents = [...sel].map(e => { let n = 0; for (let i = I.eP0[e]; i >= 0 && i < I.eP1[e]; i++) n += g.pN[i]; return [e, n]; }).sort((a, b) => a[1] - b[1]);
+  for (const [e, n] of ents) {
+    if (n > budget || n > 60000) { const B = g.eB; if (isFinite(B[4 * e])) boxes.push([B[4 * e], B[4 * e + 1], B[4 * e + 2], B[4 * e + 3]]); continue; }
+    budget -= n;
+    for (let i = I.eP0[e]; i >= 0 && i < I.eP1[e]; i++) {
+      if (g.pF[i] & 128) continue;
+      const st = g.pS[i] * 2, m = g.pN[i];
+      path.moveTo(g.co[st], g.co[st + 1]);
+      for (let j = 1; j < m; j++) path.lineTo(g.co[st + 2 * j], g.co[st + 2 * j + 1]);
+      if ((g.pF[i] & 1) && m > 2) path.closePath();
+    }
+    for (let i = I.eT0[e]; i >= 0 && i < I.eT1[e]; i++) marks.push(SC.tx[i].x, SC.tx[i].y);
+    if (sel.size < 400) for (let i = I.eS0[e]; i >= 0 && i < I.eS1[e] && marks.length < 20000; i++) { const k = g.snK[i]; if (k !== 2 && k !== 6) marks.push(g.snp[2 * i], g.snp[2 * i + 1]); }
+  }
+  selCache = { sc: SC, n: sel.size, v: selVersion, path, boxes, marks };
+  return selCache;
+}
+let selVersion = 0;
+function drawSel(fast) {
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  sctx.clearRect(0, 0, scv.width, scv.height);
+  if (!SC || !sel.size) return;
+  const G = selGeometry(), s = view.s;
+  const col = getComputedStyle(document.documentElement).getPropertyValue('--sel').trim() || '#4aa8ff';
+  sctx.setTransform(dpr * s, 0, 0, -dpr * s, dpr * (CW / 2 - view.x * s), dpr * (CH / 2 + view.y * s));
+  sctx.strokeStyle = col; sctx.lineJoin = 'round';
+  if (!fast) { sctx.globalAlpha = 0.55; sctx.lineWidth = 3 / s; sctx.stroke(G.path); sctx.globalAlpha = 1; }
+  sctx.lineWidth = 1.5 / s; sctx.setLineDash([6 / s, 4 / s]);
+  for (const b of G.boxes) sctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+  sctx.setLineDash([]);
+  if (fast) return;
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0); sctx.fillStyle = col;
+  const M = G.marks;
+  for (let i = 0; i < M.length; i += 2) { const X = sx(M[i]), Y = sy(M[i + 1]); if (X < -5 || Y < -5 || X > CW + 5 || Y > CH + 5) continue; sctx.fillRect(X - 3, Y - 3, 6, 6); }
+}
+
+// ---------- sobreposição (cursor, snap, medidas) ----------
 const SNAPN = { 1: 'extremidade', 2: 'meio', 3: 'centro', 4: 'nó', 5: 'inserção', 6: 'quadrante', 7: 'próximo' };
 function drawOvl() {
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.clearRect(0, 0, ovl.width, ovl.height);
   if (!SC) return;
   octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const selc = getComputedStyle(document.documentElement).getPropertyValue('--sel').trim() || '#4aa8ff';
-  // seleção
-  if (sel.size) {
-    const g = SC.geo, I = SC.idx, many = sel.size > 1;
-    octx.lineWidth = 3; octx.strokeStyle = selc; octx.globalAlpha = 0.55; octx.lineJoin = 'round';
-    octx.beginPath();
-    for (const e of sel) for (let i = I.eP0[e]; i >= 0 && i < I.eP1[e]; i++) {
-      if (g.pF[i] & 128) continue;
-      const s = g.pS[i] * 2, n = g.pN[i];
-      octx.moveTo(sx(g.co[s]), sy(g.co[s + 1]));
-      for (let j = 1; j < n; j++) octx.lineTo(sx(g.co[s + 2 * j]), sy(g.co[s + 2 * j + 1]));
-      if ((g.pF[i] & 1) && n > 2) octx.closePath();
-    }
-    octx.stroke(); octx.globalAlpha = 1;
-    octx.strokeStyle = selc; octx.lineWidth = 1.5; octx.fillStyle = selc;
-    for (const e of sel) {
-      for (let i = I.eT0[e]; i >= 0 && i < I.eT1[e]; i++) { const t = SC.tx[i]; octx.strokeRect(sx(t.x) - 3, sy(t.y) - 3, 6, 6); }
-      if (!many || sel.size < 400) for (let i = I.eS0[e]; i >= 0 && i < I.eS1[e]; i++) { const k = g.snK[i]; if (k === 2 || k === 6) continue; octx.fillRect(sx(g.snp[2 * i]) - 3, sy(g.snp[2 * i + 1]) - 3, 6, 6); }
-    }
-  }
   // retângulo de seleção (esquerda→direita: janela; direita→esquerda: cruzando)
   if (box) {
     const cross = box.x1 < box.x0, x = Math.min(box.x0, box.x1), y = Math.min(box.y0, box.y1), w = Math.abs(box.x1 - box.x0), h = Math.abs(box.y1 - box.y0);
@@ -948,7 +977,7 @@ function zoomEnt(e) {
 }
 function select(e) { sel.clear(); if (e >= 0) sel.add(e); selChanged(); }
 function selChanged() {
-  drawOvl();
+  selVersion++; drawSel(false); drawOvl();
   if (sel.size === 1) { selected = [...sel][0]; showInfo(selected); }
   else { selected = -1; if (sel.size) showMulti(); else showInfo(-1); }
   if (sel.size) showTab('insp');
