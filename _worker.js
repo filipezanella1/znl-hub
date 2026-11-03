@@ -18,7 +18,7 @@ const DEFAULT_TOOLS = [
   { id: "pdf-studio", name: "PDF Studio", url: "pdf-studio.html",
     desc: "Juntar, organizar, dividir, remover e extrair páginas de PDFs, tudo no navegador.", tag: "utilitário", status: "on" },
   { id: "validacao-terceiros", name: "Validação de Terceiros", url: "validacao-terceiros.html",
-    desc: "Confere a parte diária dos basculantes terceiros (21 a 20) contra o Painel TCE e aponta alertas: grave, médio e avaliar.", tag: "app", status: "on" },
+    desc: "Confere a parte diária dos terceiros (ciclo 21 a 20 ou 1 a 31) contra o Painel TCE e aponta alertas: grave, médio e avaliar.", tag: "app", status: "on" },
   { id: "relatorio-fotografico", name: "Relatório Fotográfico", url: "relatorio-fotografico.html",
     desc: "Relatório fotográfico mensal da PR-990: fotos + descrições viram PPTX no padrão TCE, com avanço, linear e índice.", tag: "app", status: "on" },
   { id: "normas", name: "Normas Rodoviárias", url: "normas.html",
