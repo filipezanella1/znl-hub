@@ -270,10 +270,10 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
       if (per) t.periodoTxt = per[0].replace(/\s+/g, " ");
       t.periodoCab = per ? { d1: +per[1], m1: +per[2], y1: per[3] ? +per[3] : null, d2: +per[4], m2: +per[5], y2: per[6] ? +per[6] : null } : null;
     }
-    var iH = findRow(rows, function (r) { var u = r.map(U); return u.indexOf("MOTORISTA") >= 0 && u.indexOf("DATA") >= 0; });
+    var iH = findRow(rows, function (r) { var u = r.map(U); return u.indexOf("DATA") >= 0 && (u.indexOf("MOTORISTA") >= 0 || u.indexOf("OPERADOR") >= 0 || u.indexOf("PREFIXO") >= 0 || u.indexOf("HORA INICIO") >= 0); });
     if (iH < 0) { t.semLayout = true; return t; }
     var h = rows[iH];
-    var C = { item: colOf(h, /^ITEM/), data: colOf(h, /^DATA/), mot: colOf(h, /^MOTORISTA/), hi: colOf(h, /^HORA INICIO/), hf: colOf(h, /^HORA FINAL/),
+    var C = { item: colOf(h, /^ITEM/), data: colOf(h, /^DATA/), mot: colOf(h, /^(MOTORISTA|OPERADOR)/), pref: colOf(h, /^(PREFIXO|PLACA)$/), hi: colOf(h, /^HORA INICIO/), hf: colOf(h, /^HORA FINAL/),
       hoi: colOf(h, /^HORIMETRO( INICIAL)?$/), dt: colOf(h, /^DIAS TRABAL/), ht: colOf(h, /^HORAS TRABALHADAS/), he: colOf(h, /^H\. ?EXTRAS/), obs: colOf(h, /^OBSERVA/), jor: colOf(h, /^JORNADA/), alm: colOf(h, /^ALMOCO/) };
     t.layoutAntigo = C.item < 0 || C.dt < 0;
     for (var i = iH + 1; i < Math.min(rows.length, iH + 40); i++) {
@@ -283,13 +283,13 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
       var item = C.item >= 0 ? row[C.item] : null;
       var hasAny = row.some(function (v) { return v != null && String(v).trim() !== ""; });
       if (!hasAny) continue;
-      if (C.item >= 0 && item == null && !isNum(row[C.data]) && !row[C.mot]) continue;
-      var x = { n: isNum(item) ? item : null, serial: isNum(row[C.data]) ? row[C.data] : null, mot: row[C.mot] ? String(row[C.mot]).trim() : "",
+      if (C.item >= 0 && item == null && !isNum(row[C.data]) && !row[C.mot] && !row[C.pref]) continue;
+      var x = { n: isNum(item) ? item : null, serial: isNum(row[C.data]) ? row[C.data] : null, mot: row[C.mot] ? String(row[C.mot]).trim() : "", pref: C.pref >= 0 && row[C.pref] ? String(row[C.pref]).trim().toUpperCase() : "",
         hi: row[C.hi], hf: row[C.hf], dt: C.dt >= 0 ? row[C.dt] : null, ht: C.ht >= 0 ? row[C.ht] : null, he: C.he >= 0 ? row[C.he] : null,
         obs: C.obs >= 0 && row[C.obs] ? String(row[C.obs]).trim() : "", jor: C.jor >= 0 ? row[C.jor] : null, alm: C.alm >= 0 ? row[C.alm] : null,
         horim: C.hoi >= 0 ? row[C.hoi] : null };
       if (!isNum(x.hi) && x.hi && !x.obs) { x.obs = String(x.hi).trim(); }
-      if (x.n == null && x.serial == null && !x.mot && !x.obs) continue;
+      if (x.n == null && x.serial == null && !x.mot && !x.pref && !x.obs) continue;
       t.rows.push(x);
     }
     // resumo
@@ -502,15 +502,26 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
       if (!t.cabecalhoOk && !t.hidden) add(3, t, "cabecalho", "Período do cabeçalho diferente do período apontado", "Cabeçalho: " + (t.periodoTxt || "sem período") + " · apontamentos de " + br(per.ini) + " a " + br(per.fim) + ".", []);
       if (t.datasAusentes) add(3, t, "sem-datas", "Parte diária sem datas", "As linhas não têm data; considerei o item 1 como " + br(per.ini) + ".", []);
       if (t.datasFora) add(3, t, "datas-fora", "Datas fora do período", t.datasFora + " linha(s) com data fora de " + br(per.ini) + "–" + br(per.fim) + ".", []);
-      if (t.placa && !/^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(t.placa)) add(3, t, "placa", "Placa em formato inválido", "'" + t.placa + "' não segue o padrão AAA0A00 / AAA0000 (verifique letra I no lugar de 1, O no lugar de 0).", []);
-      if (t.titulo) {
-        var tok = function (s) { return U(s).replace(/[^A-Z ]/g, " ").split(/\s+/).filter(function (w) { return w.length > 3 && !/^(CONSTRUCAO|TRANSPORTES|LTDA|EIRELI)$/.test(w); }).map(function (w) { return w.slice(0, 5); }); };
+      var RE_PL = /^[A-Z]{3}\d[A-Z0-9]\d{2}$/;
+      var partes = (t.placa || "").split(/[\s\/,;|-]+/).filter(Boolean);
+      var ruins = partes.filter(function (x) { return !RE_PL.test(x); });
+      if (ruins.length) add(3, t, "placa", "Placa em formato inválido", "'" + ruins.join("', '") + "' não segue o padrão AAA0A00 / AAA0000 (verifique letra I no lugar de 1, O no lugar de 0).", []);
+      // placa no nome da aba e na coluna PREFIXO conferem com o cabeçalho?
+      var plAba = (U(t.sheet).match(/[A-Z]{3}\d[A-Z0-9]\d{2}/g) || []);
+      plAba.forEach(function (pa) { if (partes.length && partes.indexOf(pa) < 0) add(3, t, "placa-aba", "Placa da aba diferente da placa do cabeçalho", "Aba '" + t.sheet.trim() + "' · cabeçalho '" + t.placa + "'.", []); });
+      var refs = plAba.concat(partes.filter(function (x) { return RE_PL.test(x); }));
+      if (refs.length) {
+        var col = {}; t.rows.forEach(function (r) { if (r.pref && RE_PL.test(r.pref.replace(/[\s-]/g, ""))) { var k = r.pref.replace(/[\s-]/g, ""); if (refs.indexOf(k) < 0) (col[k] = col[k] || []).push(r.iso); } });
+        Object.keys(col).forEach(function (k) { add(3, t, "placa-coluna", "Placa na coluna PREFIXO diferente da placa do caminhão", "Lançado '" + k + "' em " + col[k].length + " dia(s); a aba/cabeçalho indica " + refs.filter(function (x, i) { return refs.indexOf(x) === i; }).join(" / ") + ". Confira se o apontamento é deste caminhão.", col[k].filter(Boolean)); });
+      }
+      if (t.titulo && !plAba.length && !/\b(LTDA|EIRELI|ME|EPP|S\/?A)\b\.?/.test(U(t.titulo))) {
+        var tok = function (s) { return U(s).replace(/[^A-Z ]/g, " ").split(/\s+/).filter(function (w) { return w.length > 3 && !/^(CONSTRUCAO|TRANSPORTES|LTDA|EIRELI|CAMINHAO|CAMINHOES|RETRO|MAQUINA|EQUIPAMENTO)$/.test(w); }).map(function (w) { return w.slice(0, 5); }); };
         var a = tok(t.sheet), b = tok(t.titulo).concat(tok(t.motoristas.join(" ")));
         if (a.length && !a.some(function (w) { return b.indexOf(w) >= 0; }) && !(U(t.titulo).replace(/[^A-Z]/g, "").slice(0, 5) === U(t.sheet).replace(/[^A-Z]/g, "").slice(0, 5)))
           add(3, t, "nome", "Nome da aba diferente do fornecedor do cabeçalho", "Aba '" + t.sheet.trim() + "' · cabeçalho '" + t.titulo + "' · motorista " + (t.motoristas[0] || "—") + ".", []);
       }
       // jornada de modelo de outro mês
-      var deslocado = per.days.filter(function (d) { var r = t.byDay[d]; if (!r || r.worked) return false; var semJ = !isNum(r.jor); var fds = ctx[d].fds; return r.mot && (semJ !== fds) && !r.obs; });
+      var deslocado = per.days.filter(function (d) { var r = t.byDay[d]; if (!r || r.worked) return false; var semJ = !isNum(r.jor); var fds = ctx[d].fds; return (r.mot || r.pref) && (semJ !== fds) && !r.obs; });
       if (deslocado.length >= 3) add(3, t, "modelo", "Fins de semana da planilha não batem com o calendário", "Linhas sem jornada caem em dias úteis e vice-versa (" + deslocado.slice(0, 6).map(br).join(", ") + "…) — parece modelo copiado de outro mês.", deslocado);
       // HE no sábado com produção = informativo, sem alerta
       t.padrao = (function () { var ws = t.apontados.filter(function (r) { return isNum(r.hi) && isNum(r.hf); }); if (ws.length < 5) return null; var k = {}; ws.forEach(function (r) { var s = hhmm(r.hi) + "–" + hhmm(r.hf); k[s] = (k[s] || 0) + 1; }); var top = Object.keys(k).sort(function (a, b) { return k[b] - k[a]; })[0]; return { faixa: top, pct: k[top] / ws.length, n: ws.length, horim: ws.every(function (r) { return /NAO FUNCIONA/.test(U(r.horim)) || r.horim == null; }) }; })();
