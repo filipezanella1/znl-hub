@@ -48,6 +48,17 @@ input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
 .drop .t small{color:var(--dim)}
 .drop .acts{display:flex;gap:8px;flex-wrap:wrap}
 .opt{display:flex;gap:8px;align-items:center;color:var(--dim);font-size:13px}
+.ctl{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:10px 14px}
+.fld{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;min-width:0;max-width:100%}
+.fld select{min-width:0;width:100%;flex:1 1 220px}
+.fld label{font:500 11px var(--sans);text-transform:uppercase;letter-spacing:.09em;color:var(--dim);white-space:nowrap}
+.fld select{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;font:500 13px var(--mono);padding:6px 8px;max-width:100%}
+.fld select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.seg button{font:500 12.5px var(--mono);border:0;background:var(--bg);color:var(--dim);padding:6px 11px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.ctl .note{font:500 12px var(--mono);color:var(--dim)}
 .msg{font:500 12.5px var(--mono);padding:8px 12px;border-radius:4px;border:1px solid var(--line);background:var(--panel)}
 .msg.err{border-color:var(--g);color:var(--g)}
 .score{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
@@ -109,20 +120,28 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
   <header>
     <div class="prompt"><a href="index.html">znl@hub</a>:~/validacao-terceiros$ <span id="cmdline">run --painel painel-tce.pages.dev</span></div>
     <h1>Validação de <span>terceiros</span></h1>
-    <p class="lead">Confere a parte diária dos basculantes terceirizados (21 a 20) contra o Painel TCE: chuva, greve/portaria e falta de diesel. Os alertas saem em três níveis: grave, médio e avaliar.</p>
+    <p class="lead">Confere a parte diária dos equipamentos terceirizados (ciclo 21 a 20 ou 1 a 31) contra o Painel TCE: chuva, greve/portaria e falta de diesel. Os alertas saem em três níveis: grave, médio e avaliar.</p>
   </header>
 
   <section class="src" aria-label="Arquivos">
     <div class="drop" id="dropX">
       <div class="t"><span class="lbl">Parte diária (.xlsx)</span><strong id="xName">—</strong><small id="xInfo">Arraste a planilha do mês aqui.</small></div>
-      <div class="acts"><label class="btn" for="fx">Escolher planilha<input type="file" id="fx" accept=".xlsx,.xls,.xlsm"></label></div>
+      <div class="acts"><label class="btn" for="fx">Lançar planilha<input type="file" id="fx" accept=".xlsx,.xls,.xlsm"></label></div>
     </div>
     <div class="drop" id="dropP">
       <div class="t"><span class="lbl">Painel TCE</span><strong id="pName">—</strong><small id="pInfo"></small></div>
       <div class="acts"><button class="btn ghost" id="bSync" type="button">Buscar no painel</button><label class="btn ghost" for="fp">Carregar arquivo<input type="file" id="fp" accept=".html,.htm,.json"></label></div>
     </div>
   </section>
-  <div class="filters"><label class="opt"><input type="checkbox" id="optHidden"> Analisar também abas ocultas</label></div>
+  <div class="ctl" aria-label="Período da validação">
+    <div class="fld"><label id="cicloL">Ciclo</label>
+      <div class="seg" role="group" aria-labelledby="cicloL" id="ciclo">
+        <button type="button" data-c="auto" aria-pressed="true">Automático</button><button type="button" data-c="21" aria-pressed="false">21 a 20</button><button type="button" data-c="01" aria-pressed="false">1 a 31</button>
+      </div></div>
+    <div class="fld"><label for="perSel">Período</label><select id="perSel"></select></div>
+    <span class="note" id="perNote"></span>
+    <label class="opt"><input type="checkbox" id="optHidden"> Analisar também abas ocultas</label>
+  </div>
   <div id="msg" hidden></div>
 
   <section class="score" id="score" aria-label="Resumo"></section>
@@ -303,15 +322,38 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
   function num(v) { return isNum(v) ? v : 0; }
 
   /* ---------- período ---------- */
-  function detectPeriod(trucks) {
-    var cnt = {};
-    trucks.forEach(function (t) { if (t.hidden) return; t.rows.forEach(function (r) { if (r.serial) { var iso = serialToISO(r.serial); var k = iso.slice(8, 10) >= "21" ? iso.slice(0, 7) : prevMonth(iso.slice(0, 7)); cnt[k] = (cnt[k] || 0) + 1; } }); });
-    var best = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; })[0];
-    if (!best) trucks.forEach(function (t) { t.rows.forEach(function (r) { if (r.serial) { var iso = serialToISO(r.serial); var k = iso.slice(8, 10) >= "21" ? iso.slice(0, 7) : prevMonth(iso.slice(0, 7)); cnt[k] = (cnt[k] || 0) + 1; } }); }), best = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; })[0];
-    if (!best) return null;
-    var ini = best + "-21", fim = addDays(nextMonth(best) + "-21", -1), days = [];
+  // ciclo "21" = 21 a 20 · ciclo "01" = 1 a 31 (mês civil). opts.ciclo: "auto" | "21" | "01"; opts.inicio: "AAAA-MM-DD" do período escolhido
+  function periodOf(iso, ciclo) {
+    var ym = iso.slice(0, 7);
+    if (ciclo === "01") return ym + "-01";
+    return (iso.slice(8, 10) >= "21" ? ym : prevMonth(ym)) + "-21";
+  }
+  function makePeriod(ini, ciclo) {
+    var fim = ciclo === "01" ? addDays(nextMonth(ini.slice(0, 7)) + "-01", -1) : addDays(nextMonth(ini.slice(0, 7)) + "-21", -1), days = [];
     for (var d = ini; d <= fim; d = addDays(d, 1)) days.push(d);
-    return { ini: ini, fim: fim, days: days };
+    return { ini: ini, fim: fim, days: days, ciclo: ciclo };
+  }
+  function guessCycle(trucks) {
+    var v = { "21": 0, "01": 0 };
+    trucks.forEach(function (t) { if (t.hidden || !t.periodoCab) return; if (t.periodoCab.d1 === 21) v["21"]++; else if (t.periodoCab.d1 === 1) v["01"]++; });
+    if (v["21"] !== v["01"]) return v["21"] > v["01"] ? "21" : "01";
+    var first = {};
+    trucks.forEach(function (t) { if (t.hidden) return; var r = t.rows.filter(function (x) { return x.serial; })[0]; if (r) { var dd = serialToISO(r.serial).slice(8, 10); first[dd] = (first[dd] || 0) + 1; } });
+    return (first["01"] || 0) > (first["21"] || 0) ? "01" : "21";
+  }
+  function detectPeriod(trucks, opts) {
+    opts = opts || {};
+    var ciclo = opts.ciclo === "21" || opts.ciclo === "01" ? opts.ciclo : guessCycle(trucks);
+    var cnt = {};
+    function tally(onlyVisible) { trucks.forEach(function (t) { if (onlyVisible && t.hidden) return; t.rows.forEach(function (r) { if (r.serial) { var k = periodOf(serialToISO(r.serial), ciclo); cnt[k] = (cnt[k] || 0) + 1; } }); }); }
+    tally(true); if (!Object.keys(cnt).length) tally(false);
+    var cands = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a]; });
+    if (!cands.length && !opts.inicio) return null;
+    var ini = opts.inicio && periodOf(opts.inicio, ciclo) === opts.inicio ? opts.inicio : cands[0];
+    var per = makePeriod(ini, ciclo);
+    per.cicloAuto = !(opts.ciclo === "21" || opts.ciclo === "01");
+    per.candidatos = cands.sort().map(function (k) { return { ini: k, fim: makePeriod(k, ciclo).fim, linhas: cnt[k] }; });
+    return per;
   }
   function prevMonth(ym) { var y = +ym.slice(0, 4), m = +ym.slice(5, 7) - 1; if (!m) { m = 12; y--; } return y + "-" + pad(m); }
   function nextMonth(ym) { var y = +ym.slice(0, 4), m = +ym.slice(5, 7) + 1; if (m > 12) { m = 1; y++; } return y + "-" + pad(m); }
@@ -355,7 +397,7 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
   function run(sheets, painel, opts) {
     opts = opts || {};
     var trucks = sheets.filter(function (s) { return !/^RESUMO/i.test(s.name.trim()); }).map(function (s) { return parseSheet(s.name, s.rows, s.hidden); }).filter(function (t) { return !t.semLayout || t.rows.length; });
-    var per = detectPeriod(trucks);
+    var per = detectPeriod(trucks, opts);
     if (!per) return { erro: "Não encontrei datas de apontamento na planilha." };
     trucks.forEach(function (t) { classify(t, per); });
     var ctx = buildCtx(painel, per.days);
@@ -366,7 +408,7 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
     var pm1 = +per.ini.slice(5, 7), pm2 = +per.fim.slice(5, 7);
     var ativos = [], ocultos = [];
     trucks.forEach(function (t) {
-      var ok = t.periodoCab && t.periodoCab.m1 === pm1 && t.periodoCab.m2 === pm2;
+      var ok = t.periodoCab && t.periodoCab.d1 === +per.ini.slice(8, 10) && t.periodoCab.m1 === pm1 && t.periodoCab.m2 === pm2;
       var datasDoPeriodo = Object.keys(t.byDay).length;
       var datasFora = t.rows.filter(function (r) { return r.foraPeriodo; }).length;
       t.doPeriodo = datasDoPeriodo > 0 || t.datasAusentes;
@@ -450,7 +492,7 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
 
 
       // cabeçalho, placa, datas
-      if (!t.cabecalhoOk) add(3, t, "cabecalho", "Período do cabeçalho diferente do período apontado", "Cabeçalho: " + (t.periodoTxt || "sem período") + " · apontamentos de " + br(per.ini) + " a " + br(per.fim) + ".", []);
+      if (!t.cabecalhoOk && !t.hidden) add(3, t, "cabecalho", "Período do cabeçalho diferente do período apontado", "Cabeçalho: " + (t.periodoTxt || "sem período") + " · apontamentos de " + br(per.ini) + " a " + br(per.fim) + ".", []);
       if (t.datasAusentes) add(3, t, "sem-datas", "Parte diária sem datas", "As linhas não têm data; considerei o item 1 como " + br(per.ini) + ".", []);
       if (t.datasFora) add(3, t, "datas-fora", "Datas fora do período", t.datasFora + " linha(s) com data fora de " + br(per.ini) + "–" + br(per.fim) + ".", []);
       if (t.placa && !/^[A-Z]{3}\d[A-Z0-9]\d{2}$/.test(t.placa)) add(3, t, "placa", "Placa em formato inválido", "'" + t.placa + "' não segue o padrão AAA0A00 / AAA0000 (verifique letra I no lugar de 1, O no lugar de 0).", []);
@@ -507,7 +549,7 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
   const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
   const NV={1:"grave",2:"médio",3:"avaliar"};
   let painel=JSON.parse($("#snap").textContent), painelSrc="cópia embutida";
-  let sheets=null, fileName="", R=null, fLevel=0, fTruck="";
+  let sheets=null, fileName="", R=null, fLevel=0, fTruck="", ciclo="auto", inicio="";
   const sample=JSON.parse($("#sample").textContent);
   sheets=sample.sheets; fileName=sample.nome+" (última validação)";
 
@@ -521,14 +563,22 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
 
   function analyze(){
     if(!sheets) return;
-    R=VT.run(sheets,painel,{incluirOcultas:$("#optHidden").checked});
+    R=VT.run(sheets,painel,{incluirOcultas:$("#optHidden").checked,ciclo:ciclo,inicio:inicio});
     if(R.erro){ msg(R.erro,true); return; }
     const p=R.periodo, faltam=p.days.filter(d=>!R.ctx[d].temPainel);
     msg(faltam.length?`O painel não tem ${faltam.length} dia(s) do período (${faltam.slice(0,5).map(VT.br).join(", ")}${faltam.length>5?"…":""}). Esses dias não foram cruzados — atualize o painel e rode de novo.`:"");
     $("#xName").textContent=fileName;
     $("#xInfo").textContent=`${R.ativos.length} caminhão(ões) analisado(s) · ${R.ocultos.length} aba(s) fora da medição · período ${VT.br(p.ini)} a ${VT.br(p.fim)}/${p.fim.slice(0,4)}`;
     $("#cmdline").textContent=`run "${fileName.replace(/ \(.*/,"")}" --periodo ${VT.br(p.ini)}..${VT.br(p.fim)}`;
-    fTruck=""; renderAll();
+    renderPeriodo(); fTruck=""; renderAll();
+  }
+  function renderPeriodo(){
+    const p=R.periodo, yy=d=>d.slice(2,4), lab=(a,b)=>`${VT.br(a)} a ${VT.br(b)}/${yy(b)}`;
+    $("#ciclo").querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.c===ciclo));
+    const opts=p.candidatos.slice(); if(!opts.some(c=>c.ini===p.ini)) opts.push({ini:p.ini,fim:p.fim,linhas:0});
+    opts.sort((a,b)=>a.ini<b.ini?-1:1);
+    $("#perSel").innerHTML=opts.map(c=>`<option value="${c.ini}" ${c.ini===p.ini?"selected":""}>${lab(c.ini,c.fim)} · ${c.linhas} dia(s) lançado(s)</option>`).join("");
+    $("#perNote").textContent=ciclo==="auto"?`detectado: ${p.ciclo==="01"?"1 a 31":"21 a 20"}`:"";
   }
   function renderAll(){ renderScore(); renderMx(); renderTruckF(); renderAlerts(); renderReport(); }
 
@@ -613,7 +663,7 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
         const wb=XLSX.read(new Uint8Array(fr.result),{type:"array"});
         const meta=(wb.Workbook&&wb.Workbook.Sheets)||[];
         sheets=wb.SheetNames.map((n,i)=>({name:n,hidden:!!(meta[i]&&meta[i].Hidden),rows:XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:null,blankrows:true})}));
-        fileName=file.name; analyze();
+        fileName=file.name; inicio=""; analyze();
       }catch(e){ msg("Não consegui ler essa planilha: "+e.message,true); } };
     fr.readAsArrayBuffer(file);
   }
@@ -640,6 +690,8 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
     el.addEventListener("drop",e=>{e.preventDefault();el.classList.remove("over");const f=e.dataTransfer.files[0]; if(f&&ok(f)) fn(f); else if(f) msg("Formato não reconhecido: "+f.name,true);});
   });
   $("#optHidden").onchange=analyze;
+  $("#ciclo").querySelectorAll("button").forEach(b=>b.onclick=()=>{ ciclo=b.dataset.c; inicio=""; analyze(); });
+  $("#perSel").onchange=e=>{ inicio=e.target.value; analyze(); };
 
   painelInfo(); analyze();
 })();
