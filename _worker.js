@@ -304,8 +304,11 @@ export default {
     }
 
     // Páginas abertas sem senha (não usam dados do hub; tudo roda no navegador de quem acessa)
-    const PUBLIC_PAGES = new Set(["/pdf-studio", "/pdf-studio.html", "/pdf-studio/"]);
-    if (!authed && !PUBLIC_PAGES.has(path)) return Response.redirect(url.origin + "/login", 302);
+    const PUBLIC_PAGES = new Set(["/pdf-studio", "/pdf-studio.html", "/pdf-studio/",
+      "/dwg-viewer", "/dwg-viewer.html", "/dwg-viewer/"]);
+    // arquivos do DWG Viewer (leitor, conversor e worker) também abrem sem senha
+    const isPublic = PUBLIC_PAGES.has(path) || path.startsWith("/dwg/");
+    if (!authed && !isPublic) return Response.redirect(url.origin + "/login", 302);
 
     const res = await env.ASSETS.fetch(request);
     const out = new Response(res.body, res);
