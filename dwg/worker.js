@@ -1,5 +1,5 @@
 // DWG Viewer — worker: lê DWG (libredwg), monta a cena 2D e converte versões (acadrust).
-import { LibreDwg, Dwg_File_Type } from './lib/libredwg/dist/libredwg-web.js';
+import { LibreDwg, Dwg_File_Type } from './lib/libredwg/dist/libredwg-web.js?v=3';
 
 let lib = null, conv = null;
 let DB = null, HMAP = null;           // banco aberto e mapa handle -> entidade
@@ -84,7 +84,7 @@ function build(db, spaceHandle) {
   });
   const LI = new Map(layers.map((l, i) => [l.name, i]));
   const blocks = new Map();
-  const paperVps = new Set(((db.objects && db.objects.LAYOUT) || []).map(l => l.viewportId).filter(Boolean));
+  const paperVps = paperViewports(db);
   const blocksH = new Map();
   for (const b of db.tables.BLOCK_RECORD.entries) { if (!blocks.has(b.name)) blocks.set(b.name, b); blocksH.set(b.handle, b); }
   const blockOf = e => (e.blockHandle && blocksH.get(e.blockHandle)) || blocks.get(e.name);
@@ -181,9 +181,10 @@ function build(db, spaceHandle) {
     snap(M, x, y, 5);
   };
 
-  const drawEnt = (e, M, byBlock, parentLayer, depth) => {
+  const drawEnt = (e, M, byBlock, parentLayer, depth, forceLayer = -1) => {
     if (!e || e.isVisible === false) return;
-    const lay = (parentLayer !== null && (e.layer === '0' || !e.layer)) ? parentLayer : layerIdx(e.layer || '0');
+    const lay = forceLayer >= 0 ? forceLayer : (parentLayer !== null && (e.layer === '0' || !e.layer)) ? parentLayer : layerIdx(e.layer || '0');
+    const fz = forceLayer >= 0 ? forceLayer : (layers[lay].frozen ? lay : -1); // camada congelada esconde todo o conteúdo do bloco
     const prevL = curL, prevC = curC;
     curL = lay;
     let c = colorOf(e, byBlock);
@@ -311,16 +312,16 @@ function build(db, spaceHandle) {
               const cr = Math.cos(r), sr = Math.sin(r);
               const T = [cr * sx, sr * sx, -sr * sy, cr * sy, e.insertionPoint.x + ox * cr - oy * sr, e.insertionPoint.y + ox * sr + oy * cr];
               const Mi = affMul(affMul(Mo, T), [1, 0, 0, 1, -bp.x, -bp.y]);
-              for (const be of b.entities) if (be.type !== 'ATTDEF') drawEnt(be, Mi, bb === -1 ? (layers[lay].color) : bb, lay, depth + 1);
+              for (const be of b.entities) if (be.type !== 'ATTDEF') drawEnt(be, Mi, bb === -1 ? (layers[lay].color) : bb, lay, depth + 1, fz);
             }
           }
           snap(Mo, e.insertionPoint.x, e.insertionPoint.y, 5);
-          for (const a of e.attribs || []) drawEnt(a, M, curC === -1 ? layers[lay].color : curC, lay, depth + 1);
+          for (const a of e.attribs || []) drawEnt(a, M, curC === -1 ? layers[lay].color : curC, lay, depth + 1, fz);
           break;
         }
         case 'DIMENSION': {
           const b = blockOf(e);
-          if (b && b.entities && depth < 12) for (const be of b.entities) drawEnt(be, M, curC === -1 ? layers[lay].color : curC, lay, depth + 1);
+          if (b && b.entities && depth < 12) for (const be of b.entities) drawEnt(be, M, curC === -1 ? layers[lay].color : curC, lay, depth + 1, fz);
           else if (e.textPoint) addText(M, e.textPoint.x, e.textPoint.y, 2.5, 0, String(e.text || (e.measurement != null ? e.measurement.toFixed(2) : '')), 1, 2, 1, false);
           if (e.definitionPoint) snap(M, e.definitionPoint.x, e.definitionPoint.y, 4);
           if (e.subDefinitionPoint1) snap(M, e.subDefinitionPoint1.x, e.subDefinitionPoint1.y, 4);
@@ -597,17 +598,32 @@ function spaces(db) {
   return out;
 }
 
+// A viewport "do papel" de cada layout é a primeira VIEWPORT do bloco do layout
+// (o campo viewportId do LAYOUT guarda a última viewport ativa, não ela).
+let PAPER_VPS = null, PAPER_DB = null;
+function paperViewports(db) {
+  if (PAPER_DB === db && PAPER_VPS) return PAPER_VPS;
+  const out = new Set();
+  for (const b of db.tables.BLOCK_RECORD.entries) {
+    if (!/^\*paper_space/i.test(b.name)) continue;
+    const list = (b.entities && b.entities.length) ? b.entities : db.entities.filter(e => e.ownerBlockRecordSoftId === b.handle);
+    const v = list.find(e => e.type === 'VIEWPORT'); if (v) out.add(v.handle);
+  }
+  PAPER_DB = db; PAPER_VPS = out; return out;
+}
+
 // Janelas de viewport de um layout: como mapear o model space para o papel
 function viewports(db, spaceHandle, origin) {
   const sp = spaces(db).find(x => x.handle === spaceHandle);
   if (!sp || sp.model) return [];
   const br = db.tables.BLOCK_RECORD.entries.find(b => b.handle === spaceHandle);
   const list = (br && br.entities && br.entities.length) ? br.entities : db.entities.filter(e => e.ownerBlockRecordSoftId === spaceHandle);
+  const paperVps = paperViewports(db);
   const layerByHandle = new Map(db.tables.LAYER.entries.map(l => [String(l.handle).toUpperCase(), l.name]));
   const out = [];
   for (const v of list) {
     if (v.type !== 'VIEWPORT' || !v.width || !v.height || !v.viewHeight) continue;
-    if (sp.vp && v.handle === sp.vp) continue;           // a viewport do próprio papel
+    if (paperVps.has(v.handle)) continue;                 // a viewport do próprio papel
     if (v.isVisible === false) continue;
     const dir = v.viewDirection || { x: 0, y: 0, z: 1 };
     const plan = Math.abs(dir.x) < 1e-6 && Math.abs(dir.y) < 1e-6;
