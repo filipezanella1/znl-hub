@@ -169,8 +169,8 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
     <textarea class="rep" id="rep" readonly aria-label="Texto do relatório"></textarea>
     <details><summary>Como cada nível é decidido</summary>
       <div class="rules">
-        <p><b>Grave:</b> hora extra em dia de greve/portaria, chuva (2+ períodos com chuva ou ≥10 mm) ou sem diesel.</p>
-        <p><b>Médio:</b> jornada normal apontada em dia de greve de terceiros, sem diesel na obra ou chuva impraticável; caminhão que sai da manutenção justamente nos dias sem diesel/greve e volta depois; trabalho em domingo/feriado ou HE em sábado sem produção no painel; mesma placa ou motorista em dois caminhões.</p>
+        <p><b>Grave:</b> hora extra (inclusive a de sexta após 16:30) em dia de greve/portaria, chuva (2+ períodos com chuva ou ≥10 mm) ou sem diesel.</p>
+        <p><b>Médio:</b> hora extra de sexta-feira fora do cálculo da planilha (a jornada de sexta vai até 16:30); jornada normal apontada em dia de greve de terceiros, sem diesel na obra ou chuva impraticável; caminhão que sai da manutenção justamente nos dias sem diesel/greve e volta depois; trabalho em domingo/feriado ou HE em sábado sem produção no painel; mesma placa ou motorista em dois caminhões.</p>
         <p><b>Avaliar:</b> abas ocultas ou de outro período, prefixo repetido, placa inválida, apontamentos com horário idêntico todo dia, cabeçalho trocado, modelo de outro mês, manutenção longa ou intermitente.</p>
         <p>“Sem diesel” = o painel registra falta de diesel e o dia fechou sem estoque e sem entrada.</p>
       </div></details>
@@ -373,6 +373,11 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
       var he = isNum(r.he) && r.he > 0.0005 ? r.he : 0;
       if (!he && times && isNum(r.ht) && r.ht - jorn > 0.0035 && isNum(r.jor)) he = r.ht - jorn;
       r.heCalc = he;
+      // sexta-feira: jornada até 16:30; o que passar disso é hora extra, mesmo que a planilha não calcule
+      var SEXTA_FIM = 16.5 / 24;
+      r.heSexta = iso && dow(iso) === 5 && times && r.hf > SEXTA_FIM + 1 / 1440 ? r.hf - SEXTA_FIM : 0;
+      r.heEf = Math.max(he, r.heSexta);
+      r.heSextaFalta = r.heSexta - he > 1 / 1440 ? r.heSexta - he : 0;
       r.worked = worked;
       r.kind = worked ? "trab" : /MANUT/.test(o) ? "man" : /GREVE|PARALIS/.test(o) ? "greve" : /FERIADO/.test(o) ? "feriado" : /SEM CONTRATO|FIM DE CONTRATO/.test(o) ? "semctr" : /CHUVA/.test(o) ? "chuva" : /FALTA/.test(o) ? "falta" : o ? "outro" : "vazio";
       r.obsU = o;
@@ -431,14 +436,16 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
         if (c.semDiesel) motivo.push("sem diesel");
         if (c.chuva) motivo.push("chuva " + (c.mm || 0) + " mm" + (c.imprat ? ", impraticável" : ""));
         var obsGreve = /GREVE|PARALIS/.test(r.obsU), obsMan = /MANUT/.test(r.obsU), obsChuva = /CHUVA/.test(r.obsU);
-        if (r.worked && r.heCalc > 0) {
-          if (motivo.length || obsGreve) grav.push({ d: d, he: r.heCalc, motivo: motivo.concat(obsGreve && !(c.greve && c.greve.length) ? ["greve anotada na própria planilha"] : []) });
+        var notaSexta = r.heSextaFalta ? "sexta com saída " + hhmm(r.hf) + ", HE não calculada na planilha" : "";
+        if (r.worked && r.heEf > 0) {
+          if (motivo.length || obsGreve) grav.push({ d: d, he: r.heEf, nota: notaSexta, motivo: motivo.concat(obsGreve && !(c.greve && c.greve.length) ? ["greve anotada na própria planilha"] : []) });
           else if (c.feriado || c.dow === 0) pushM(med, "HE em " + (c.feriado ? "feriado" : "domingo") + (c.prodHaul ? "" : " sem produção no painel"), d);
           else if (c.maoObra && c.maoObra.length) pushM(med, "HE em dia com problema de mão de obra (" + c.maoObra.join(", ") + ")", d);
           else if (c.dow === 6 && c.temPainel && !c.prodHaul) pushM(med, "HE no sábado sem produção de terraplenagem no painel", d);
-          else if (c.dow !== 6 && r.heCalc > 2 / 24) pushM(av, "Hora extra acima de 2h no dia", d, hrs(r.heCalc));
+          else if (c.dow !== 6 && r.heEf > 2 / 24) pushM(av, "Hora extra acima de 2h no dia", d, hrs(r.heEf));
+          if (r.heSextaFalta && !(motivo.length || obsGreve)) pushM(med, "sexta", d, "saída " + hhmm(r.hf) + " · +" + hrs(r.heSexta) + " após 16:30" + (r.heCalc ? " (planilha calculou " + hrs(r.heCalc) + ")" : " (planilha não calculou)"));
         }
-        if (r.worked && r.heCalc === 0) {
+        if (r.worked && r.heEf === 0) {
           if (c.greve && c.greve.length) pushM(med, "greve", d, c.prodHaul ? "painel registra " + c.prodHaul + " m³ de terraplenagem" : "painel sem produção de terraplenagem");
           if (c.semDiesel) pushM(med, "diesel", d, c.prodHaul ? c.prodHaul + " m³ no painel" : "");
           if (c.imprat && !c.semDiesel && !(c.greve && c.greve.length)) pushM(med, "imprat", d);
@@ -454,10 +461,10 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
       if (grav.length) {
         var heT = grav.reduce(function (a, g) { return a + g.he; }, 0);
         add(1, t, "he-contexto", "Hora extra em dia de greve, chuva ou sem diesel",
-          grav.map(function (g) { return br(g.d) + " (" + WD[dow(g.d)] + "): +" + hrs(g.he) + " — " + g.motivo.join("; "); }).join("\n"),
+          grav.map(function (g) { return br(g.d) + " (" + WD[dow(g.d)] + "): +" + hrs(g.he) + " — " + g.motivo.join("; ") + (g.nota ? " · " + g.nota : ""); }).join("\n"),
           grav.map(function (g) { return g.d; }), rate * heT / 0.375);
       }
-      var ttl = { greve: "Apontamento normal em dia de greve/portaria de terceiros", diesel: "Apontamento normal em dia sem diesel na obra", imprat: "Jornada completa em dia de chuva impraticável (painel)" };
+      var ttl = { greve: "Apontamento normal em dia de greve/portaria de terceiros", diesel: "Apontamento normal em dia sem diesel na obra", imprat: "Jornada completa em dia de chuva impraticável (painel)", sexta: "Hora extra de sexta-feira (após 16:30) fora do cálculo da planilha" };
       Object.keys(med).forEach(function (k) {
         var m = med[k], ex = m.extra.filter(Boolean);
         var det = m.dias.map(function (d, i) { var c = ctx[d]; var x = br(d) + " (" + WD[dow(d)] + ")"; if (k === "imprat" || k === "diesel") x += " · " + (c.mm || 0) + " mm " + (c.cond || ""); if (m.extra[i]) x += " · " + m.extra[i]; return x; }).join("\n");
@@ -606,8 +613,8 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
       h+=`<tr><td class="rh">${esc(t.nome)}<small>${esc(t.placa||"")}</small></td>`+p.days.map(d=>{
         const r=t.byDay[d], f=flag[t.sheet+"|"+d];
         if(!r) return `<td class="c ${f?"f"+f:""}"></td>`;
-        const k=r.worked?(r.heCalc?"he":"trab"):r.kind;
-        const tip=`${VT.br(d)} · ${r.mot||""}${r.worked?" · "+VT.hhmm(r.hi)+"–"+VT.hhmm(r.hf)+(r.heCalc?" · HE "+VT.hrs(r.heCalc):""):""}${r.obs?" · "+r.obs:""}`;
+        const k=r.worked?(r.heEf?"he":"trab"):r.kind;
+        const tip=`${VT.br(d)} · ${r.mot||""}${r.worked?" · "+VT.hhmm(r.hi)+"–"+VT.hhmm(r.hf)+(r.heEf?" · HE "+VT.hrs(r.heEf)+(r.heSextaFalta?" (sexta após 16:30, fora do cálculo)":""):""):""}${r.obs?" · "+r.obs:""}`;
         const lab=k==="man"?"M":k==="greve"?"G":k==="feriado"?"F":k==="semctr"?"–":"";
         return `<td class="c ${k} ${f?"f"+f:""}" title="${esc(tip)}">${lab}</td>`;}).join("")+`</tr>`;
     });
@@ -650,7 +657,7 @@ textarea.rep{width:100%;min-height:220px;background:var(--bg);color:var(--fg);bo
     XLSX.utils.book_append_sheet(wb,s1,"Alertas");
     const head=["Caminhão","Placa"].concat(p.days.map(d=>VT.br(d)));
     const ctxRows=[["Chuva mm",""].concat(p.days.map(d=>R.ctx[d].temChuva?R.ctx[d].mm+" "+R.ctx[d].cond:"")),["Sem diesel",""].concat(p.days.map(d=>R.ctx[d].semDiesel?"X":"")),["Greve/portaria",""].concat(p.days.map(d=>(R.ctx[d].greve||[]).join(", "))),["Terrap. m³",""].concat(p.days.map(d=>R.ctx[d].prodHaul||""))];
-    const tr=R.ativos.map(t=>[t.nome,t.placa||""].concat(p.days.map(d=>{const r=t.byDay[d]; if(!r) return ""; return r.worked?(r.heCalc?"T+HE "+VT.hrs(r.heCalc):"T"):(r.obs||"");})));
+    const tr=R.ativos.map(t=>[t.nome,t.placa||""].concat(p.days.map(d=>{const r=t.byDay[d]; if(!r) return ""; return r.worked?(r.heEf?"T+HE "+VT.hrs(r.heEf)+(r.heSextaFalta?" (sexta)":""):"T"):(r.obs||"");})));
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([head].concat(ctxRows,[[]],tr)),"Calendário");
     XLSX.writeFile(wb,`Validacao_terceiros_${p.ini}_a_${p.fim}.xlsx`);
   };
