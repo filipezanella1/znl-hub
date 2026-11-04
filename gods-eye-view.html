@@ -31,26 +31,27 @@ input{font:inherit;background:#0d1f14;border:1px solid var(--line);color:var(--f
 <div class="wrap">
   <div class="prompt"><a href="./" title="Voltar ao hub">znl@hub</a>:~/gods-eye-view$ ./launch</div>
   <h1>God's Eye View</h1>
-  <p class="lead">Globo 3D com aviões, navios, satélites, terremotos, clima e câmeras públicas ao vivo. Projeto aberto de Bilawal Sidhu.</p>
+  <p class="lead">Globo 3D com aviões, navios, satélites, terremotos, clima e câmeras públicas ao vivo, no computador ou no celular. Projeto aberto de Bilawal Sidhu.</p>
 
   <div class="box">
     <h2>Abrir</h2>
-    <p>O app precisa de um servidor próprio para buscar os dados ao vivo, então ele roda no seu computador e abre no navegador desse mesmo computador. Não abre pelo celular.</p>
+    <p>O globo roda no seu computador e o hub só aponta para ele. No computador, use <code>http://localhost:4173</code>. No celular, cole aqui o endereço <code>https://….ts.net</code> que o instalador mostrou (fica salvo neste aparelho).</p>
     <div class="row">
       <input id="url" aria-label="Endereço do app" spellcheck="false" autocapitalize="off">
       <a class="btn" id="go" href="http://localhost:4173" target="_blank" rel="noopener">Abrir o globo</a>
     </div>
-    <p class="dim">Se o Pinokio mostrar outra porta, troque o endereço acima. Ele fica salvo neste aparelho.</p>
+    <p class="dim">No celular, o app Tailscale precisa estar ligado e o computador também.</p>
   </div>
 
   <div class="box">
     <h2>Instalar no computador (uma vez)</h2>
     <ol>
-      <li>Instale o <a class="warn" href="https://desktop.pinokio.co/" target="_blank" rel="noopener">Pinokio</a>, versão 8.2 ou mais nova (Windows, Mac ou Linux).</li>
-      <li>Abra a <a class="warn" href="https://pinokio.co/apps/github-com-bilawalsidhu-gods-eye-view" target="_blank" rel="noopener">página do God's Eye View no Pinokio</a> e clique em <b>Install</b>.</li>
-      <li>Depois, sempre que quiser usar: no Pinokio, clique em <b>Start</b> e volte aqui em <b>Abrir o globo</b>.</li>
+      <li>No computador, baixe o <a class="warn" href="gods-eye-view/instalar-gods-eye-view.bat" download>instalador</a> e dê dois cliques. Se o Windows avisar, clique em <b>Mais informações → Executar assim mesmo</b>.</li>
+      <li>Ele instala o que falta (Git, Node.js, Tailscale), pede para você entrar no Tailscale e deixa o globo iniciando sozinho com o Windows.</li>
+      <li>No fim, ele mostra e copia o endereço para o celular, e salva em <b>endereco-gods-eye-view.txt</b> na Área de Trabalho.</li>
+      <li>No celular: instale o app <b>Tailscale</b>, entre com a mesma conta, e cole o endereço no campo acima.</li>
     </ol>
-    <p class="dim">Funciona sem nenhuma chave. Para os prédios em 3D realista, crie um token gratuito no <a class="warn" href="https://cesium.com/ion" target="_blank" rel="noopener">Cesium ion</a> e cole no botão POWER UP, no canto do app.</p>
+    <p class="dim">Funciona sem nenhuma chave. Para os prédios em 3D realista, crie um token gratuito no <a class="warn" href="https://cesium.com/ion" target="_blank" rel="noopener">Cesium ion</a> e cole no botão POWER UP, abrindo o app pelo computador (localhost).</p>
   </div>
 
   <div class="row">
