@@ -31,8 +31,13 @@ function Ensure($cmd, $id, $name, $fallback) {
   $p = Find-Cmd $cmd $fallback
   if ($p) { Info "$name ja instalado."; return $p }
   Step "Instalando $name (se o Windows pedir permissao, clique em Sim)"
-  winget install --id $id -e --silent --accept-package-agreements --accept-source-agreements | Out-Host
+  winget install --id $id -e --source winget --silent --accept-package-agreements --accept-source-agreements | Out-Host
   Refresh-Path
+  if (-not (Find-Cmd $cmd $fallback)) {
+    Info "Tentando de novo pelo nome..."
+    winget install $name --source winget --silent --accept-package-agreements --accept-source-agreements | Out-Host
+    Refresh-Path
+  }
   $p = Find-Cmd $cmd $fallback
   if (-not $p) { throw "Nao consegui instalar $name. Feche esta janela e rode o instalador de novo." }
   return $p
@@ -47,7 +52,7 @@ try {
   $git  = Ensure 'git' 'Git.Git' 'Git' "$env:ProgramFiles\Git\cmd\git.exe"
   $node = Ensure 'node' 'OpenJS.NodeJS.LTS' 'Node.js' "$env:ProgramFiles\nodejs\node.exe"
   $npm  = Find-Cmd 'npm.cmd' "$env:ProgramFiles\nodejs\npm.cmd"
-  $ts   = Ensure 'tailscale' 'tailscale.tailscale' 'Tailscale' "$env:ProgramFiles\Tailscale\tailscale.exe"
+  $ts   = Ensure 'tailscale' 'Tailscale.Tailscale' 'Tailscale' "$env:ProgramFiles\Tailscale\tailscale.exe"
 
   $v = [version]((& $node -v).TrimStart('v'))
   $okNode = ($v.Major -eq 24 -and $v -ge [version]'24.14.0') -or ($v.Major -eq 26)
