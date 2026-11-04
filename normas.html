@@ -101,6 +101,27 @@ mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--accent);color:var(--accent-ink);font:600 12px var(--mono);padding:8px 14px;border-radius:4px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:9}
 .toast.show{opacity:1}
 .err{border:1px solid var(--bad);border-radius:6px;padding:12px 14px;font:13px var(--mono);color:var(--bad)}
+/* abas Rodoviárias | ABNT */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line)}
+.tab{font:600 13px var(--mono);letter-spacing:.04em;background:none;border:0;border-bottom:2px solid transparent;color:var(--dim);padding:9px 14px;margin-bottom:-1px;cursor:pointer;display:inline-flex;gap:8px;align-items:baseline}
+.tab small{font-weight:400;opacity:.8;font-variant-numeric:tabular-nums}
+.tab:hover{color:var(--fg)}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.pane{display:grid;gap:18px}
+.org.abnt{color:#ff8fa3}
+@media (prefers-color-scheme: light){ :root:not([data-theme="dark"]) .org.abnt{color:#b0263f} }
+.st{font:600 11px var(--mono);padding:1px 7px;border-radius:3px;flex:none}
+.st.vigente{background:var(--hl);color:var(--accent)}
+.st.cancelada,.st.nf{background:transparent;color:var(--warn);border:1px dashed var(--warn)}
+.res{color:var(--dim);font-size:13.5px;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ib.free{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.ib.free:hover{filter:brightness(1.08)}
+.sub-link{font:600 12px var(--mono);background:none;border:0;border-bottom:1px dashed var(--warn);color:var(--warn);padding:0;cursor:pointer}
+.note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--warn);border-radius:6px;padding:10px 14px;font-size:13.5px;color:var(--dim);display:grid;gap:4px}
+.note b{color:var(--fg)}
+.note a{color:var(--accent)}
+.sim li .yrs{font:11px var(--mono);color:var(--dim)}
 footer{color:var(--dim);font-size:12.5px;max-width:86ch;display:grid;gap:6px}
 footer p{margin:0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -110,10 +131,16 @@ footer p{margin:0}
 <div class="wrap">
   <header>
     <div class="prompt"><a href="./" style="color:inherit;text-decoration:none" title="Voltar ao hub"><b>znl@hub</b></a>:~/normas$ grep -ri</div>
-    <h1>Normas <span>Rodoviárias</span></h1>
-    <p class="lead">Busca única nas especificações de serviço, métodos de ensaio, manuais e projetos-padrão do DNIT, DER-PR e outros órgãos estaduais. Cada resultado abre o PDF direto no site oficial.</p>
+    <h1 id="h1">Normas <span>Rodoviárias</span></h1>
+    <p class="lead" id="lead">Busca única nas especificações de serviço, métodos de ensaio, manuais e projetos-padrão do DNIT, DER-PR e outros órgãos estaduais. Cada resultado abre o PDF direto no site oficial.</p>
   </header>
 
+  <div class="tabs" role="tablist" aria-label="Seção">
+    <button class="tab" role="tab" id="tab-rod" aria-controls="pane-rod" aria-selected="true">Rodoviárias <small id="tn-rod"></small></button>
+    <button class="tab" role="tab" id="tab-abnt" aria-controls="pane-abnt" aria-selected="false">Normas ABNT <small id="tn-abnt"></small></button>
+  </div>
+
+  <div class="pane" id="pane-rod" role="tabpanel" aria-labelledby="tab-rod">
   <div class="search">
     <span class="ps" aria-hidden="true">&gt;</span>
     <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="CBUQ, sub-base, 031/2006, ES-PA 03, Marshall…" aria-label="Buscar normas">
@@ -145,9 +172,49 @@ footer p{margin:0}
     <h2>Fontes oficiais</h2>
     <div class="stab" id="srcs"></div>
   </section>
+  </div>
+
+  <div class="pane" id="pane-abnt" role="tabpanel" aria-labelledby="tab-abnt" hidden>
+    <div class="note">
+      <span><b>Como abrir as NBR.</b> As normas ABNT são protegidas por direito autoral e vendidas pela própria ABNT, então não existe PDF aberto legítimo da maioria delas. O botão <b>PDF aberto</b> só aparece quando um órgão público publica a norma integral com autorização (caso das normas de acessibilidade).</span>
+      <span>Para as demais: <b>profissional com registro no CREA tem acesso gratuito e ilimitado</b> à coleção ABNT pelo convênio Confea/ABNT (botão <b>CREA grátis</b>); o botão <b>catálogo</b> mostra a edição vigente e permite uma visualização gratuita por norma mediante cadastro.</span>
+    </div>
+
+    <div class="search">
+      <span class="ps" aria-hidden="true">&gt;</span>
+      <input id="aq" type="search" autocomplete="off" spellcheck="false" placeholder="7181, granulometria, NM 248, concreto, emulsão…" aria-label="Buscar normas ABNT">
+      <kbd>/</kbd>
+    </div>
+    <div class="ex" id="aex">tente:
+      <button>granulometria</button><button>emulsão asfáltica</button><button>cimento</button><button>concreto</button><button>agregado</button><button>aço</button><button>NBR 6118</button><button>NM 248</button>
+    </div>
+
+    <div class="filters">
+      <div class="chips" id="aorgs" role="group" aria-label="Citada por"></div>
+      <div class="frow">
+        <select id="ast" aria-label="Situação"></select>
+        <select id="aord" aria-label="Ordem">
+          <option value="cit">mais citadas primeiro</option>
+          <option value="num">pelo número</option>
+          <option value="rec">edição mais recente</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="aone"> incluir citadas uma vez só</label>
+        <span class="spacer"></span>
+        <button class="chip fav" id="afavf" aria-pressed="false">★ favoritas <small id="afavn">0</small></button>
+      </div>
+    </div>
+
+    <div id="aerr" class="err" hidden></div>
+    <section aria-live="polite">
+      <div class="bar"><h2><b id="an">…</b> <span id="anl">normas ABNT</span></h2><span class="sub" id="aupd"></span></div>
+    </section>
+    <ul class="list" id="alist"></ul>
+    <button class="more" id="amore" hidden>mostrar mais</button>
+  </div>
 
   <footer>
     <p>Os links apontam para os arquivos publicados pelos próprios órgãos; o catálogo é atualizado toda semana. Antes de usar em contrato, confira no site do órgão se a revisão é a vigente exigida no edital.</p>
+    <p>A aba ABNT é montada lendo o texto de cada PDF do catálogo e anotando as NBR citadas; título, edição e situação vêm do catálogo da Target, revenda autorizada da ABNT. Uma especificação antiga pode citar uma edição já substituída: o ano citado aparece em "citada por".</p>
     <p>Outros estados (DAER-RS, DER-RJ, DER-ES, GOINFRA) foram verificados, mas não publicam um índice aberto de especificações; podem entrar quando passarem a publicar.</p>
   </footer>
 </div>
@@ -412,15 +479,28 @@ $("#list").addEventListener("click", async e => {
 /* ---------- estado na URL ---------- */
 function syncUrl(){
   const p = new URLSearchParams();
-  if (st.q) p.set("q", st.q); if (st.org) p.set("o", st.org); if (st.tp) p.set("tp", st.tp);
-  if (st.old) p.set("ant", "1"); if (st.fav) p.set("fav", "1");
+  if (aba === "abnt") {
+    p.set("aba", "abnt");
+    if (ast.q) p.set("q", ast.q); if (ast.org) p.set("o", ast.org); if (ast.st) p.set("st", ast.st);
+    if (ast.ord !== "cit") p.set("ord", ast.ord); if (ast.one) p.set("um", "1"); if (ast.fav) p.set("fav", "1");
+  } else {
+    if (st.q) p.set("q", st.q); if (st.org) p.set("o", st.org); if (st.tp) p.set("tp", st.tp);
+    if (st.old) p.set("ant", "1"); if (st.fav) p.set("fav", "1");
+  }
   const s = p.toString(); history.replaceState(null, "", location.pathname + (s ? "?" + s : ""));
 }
 function readUrl(){
   const p = new URLSearchParams(location.search);
+  if (p.get("aba") === "abnt") {
+    ast.q = p.get("q") || ""; ast.org = p.get("o") || ""; ast.st = p.get("st") || "";
+    ast.ord = ["cit","num","rec"].includes(p.get("ord")) ? p.get("ord") : "cit"; ast.one = p.get("um") === "1"; ast.fav = p.get("fav") === "1";
+    $("#aq").value = ast.q; $("#aone").checked = ast.one; $("#aord").value = ast.ord; $("#afavf").setAttribute("aria-pressed", ast.fav);
+    return "abnt";
+  }
   st.q = p.get("q") || ""; st.org = p.get("o") || ""; st.tp = p.get("tp") || "";
   st.old = p.get("ant") === "1"; st.fav = p.get("fav") === "1";
   $("#q").value = st.q; $("#old").checked = st.old; $("#favf").setAttribute("aria-pressed", st.fav);
+  return "rod";
 }
 
 let deb;
@@ -432,12 +512,223 @@ $("#favf").addEventListener("click", e => { st.fav = !st.fav; e.currentTarget.se
 $("#more").addEventListener("click", more);
 $("#ex").addEventListener("click", e => { if (e.target.tagName !== "BUTTON") return; $("#q").value = st.q = e.target.textContent; run(); $("#q").focus(); });
 document.addEventListener("keydown", e => {
-  if (e.key === "/" && document.activeElement !== $("#q") && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $("#q").focus(); $("#q").select(); }
+  const box = aba === "abnt" ? $("#aq") : $("#q");
+  if (e.key === "/" && document.activeElement !== box && !/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); box.focus(); box.select(); }
   if (e.key === "Escape" && document.activeElement === $("#q") && $("#q").value) { $("#q").value = st.q = ""; run(); }
+  if (e.key === "Escape" && document.activeElement === $("#aq") && $("#aq").value) { $("#aq").value = ast.q = ""; arun(); }
+});
+
+/* =================== aba ABNT =================== */
+// abnt.json: uma entrada por NBR citada nos PDFs do catálogo (gerado por normas/coletor/abnt.py)
+const CONFEA = "https://www.abntcatalogo.com.br/confea";
+const ORG_SIGLA = { dnit:"DNIT", derpr:"DER-PR", dersp:"DER-SP", dermg:"DER-MG", sinfra_mt:"SINFRA-MT" };
+const ST_TXT = { vigente:"vigente", cancelada:"cancelada", nf:"não localizada" };
+let AB = null, AALL = [], aview = [], ashown = 0, aba = "rod";
+const ast = { q:"", org:"", st:"", ord:"cit", one:false, fav:false };
+const abKey = it => it.u || ("https://www.target.com.br/pesquisa/normas-tecnicas/" + encodeURIComponent(it.k) + "/1");
+const abCode = it => "ABNT " + it.k;
+const abYM = d => d ? d.split("-").reverse().join("/") : "";
+
+function aprep(it, i){
+  it.i = i;
+  it.hc = norm(it.k);
+  it.cc = compact(it.k);
+  it.num = compact(it.k.replace(/^NBR\s*/, ""));               // "7181", "nm248", "15823-2" -> "158232"
+  it.ht = norm(it.t || "");
+  it.hay = it.hc + " | " + it.ht + " | " + norm(it.res || "") + (it.sub ? " | " + norm(it.sub) : "") + (it.partes ? " | " + norm(it.partes.map(p => p.t).join(" | ")) : "");
+  it.orgs = new Set(it.cit.map(j => AB.docs[j].f));
+  it.ncit = it.cit.length;
+}
+
+function ascore(it, terms){
+  let s = 0;
+  for (const t of terms) {
+    let best = 0;
+    if (t.cmp && (it.num === t.cmp || it.cc === t.cmp)) best = 40;
+    else if (t.cmp && /^\d/.test(t.cmp) && it.num.startsWith(t.cmp)) best = 14;
+    for (const a of t.alts) {
+      const p = it.hay.indexOf(a);
+      if (p < 0) continue;
+      if (a.length <= 4 && !t.re.get(a).test(it.hay)) continue;
+      let v = 4;
+      if (it.hc.includes(a)) v += 8;
+      if (it.ht.startsWith(a)) v += 4; else if (t.re.get(a).test(it.ht)) v += 2;
+      best = Math.max(best, v);
+    }
+    if (!best && t.cmp && t.cmp.length >= 3 && it.cc.includes(t.cmp)) best = 8;
+    // radical: "granulometria" acha "granulométrica", "asfaltica" acha "asfálticos"
+    if (!best && t.raw && t.raw.length >= 6 && /^[a-z]+$/.test(t.raw) && it.hay.includes(t.raw.slice(0, t.raw.length >= 9 ? -3 : -2))) best = 3;
+    if (!best) return -1;
+    s += best;
+  }
+  if (terms.length) {
+    const qc = terms.map(t => t.cmp || "").join("");
+    if (qc.length >= 3 && (it.num === qc || it.cc === qc || it.cc === "nbr" + qc)) s += 40;
+  }
+  return s + Math.min(6, it.ncit / 4) + (it.s === "vigente" ? 2 : 0);
+}
+
+function arun(){
+  if (!AB) return;
+  const terms = parseQuery(ast.q);
+  const pre = AALL.filter(it =>
+    (ast.one || it.ncit > 1 || terms.length || it.pdf || it.sub) &&
+    (!ast.fav || favs.has(abKey(it))));
+  let sc = terms.length ? pre.map(it => [it, ascore(it, terms)]).filter(x => x[1] >= 0) : pre.map(it => [it, 0]);
+  const byOrg = {}, bySt = { vigente:0, cancelada:0, pdf:0 };
+  for (const [it] of sc) {
+    if (stOk(it)) for (const o of it.orgs) byOrg[o] = (byOrg[o] || 0) + 1;
+    if (!ast.org || it.orgs.has(ast.org)) { if (it.s === "vigente") bySt.vigente++; else bySt.cancelada++; if (it.pdf) bySt.pdf++; }
+  }
+  const totAll = sc.filter(([it]) => stOk(it)).length;
+  sc = sc.filter(([it]) => (!ast.org || it.orgs.has(ast.org)) && stOk(it));
+  const ord = {
+    cit: (a,b) => b[0].ncit - a[0].ncit || a[0].i - b[0].i,
+    num: (a,b) => a[0].i - b[0].i,
+    rec: (a,b) => (b[0].d || "").localeCompare(a[0].d || "") || a[0].i - b[0].i
+  }[ast.ord];
+  sc.sort(terms.length ? (a,b) => b[1]-a[1] || ord(a,b) : ord);
+  aview = sc.map(x => x[0]); aview.terms = terms;
+
+  $("#aorgs").innerHTML = `<button class="chip" data-o="" aria-pressed="${!ast.org}">Citadas por todos <small>${totAll}</small></button>` +
+    Object.keys(ORG_SIGLA).filter(o => AB.docs.some(d => d.f === o)).map(o =>
+      `<button class="chip" data-o="${o}" aria-pressed="${ast.org===o}">${ORG_SIGLA[o]} <small>${byOrg[o]||0}</small></button>`).join("");
+  const n = bySt.vigente + bySt.cancelada;
+  $("#ast").innerHTML = [["", `Todas as situações (${n})`], ["vigente", `Vigentes (${bySt.vigente})`],
+    ["cancelada", `Canceladas ou não localizadas (${bySt.cancelada})`], ["pdf", `Com PDF aberto oficial (${bySt.pdf})`]]
+    .map(([v, t]) => `<option value="${v}"${ast.st===v?" selected":""}>${t}</option>`).join("");
+
+  ashown = 0; $("#alist").innerHTML = ""; amore();
+  $("#an").textContent = aview.length.toLocaleString("pt-BR");
+  $("#anl").textContent = aview.length === 1 ? "norma ABNT" : "normas ABNT";
+  syncUrl();
+}
+function stOk(it){ return !ast.st || (ast.st === "pdf" ? !!it.pdf : ast.st === "vigente" ? it.s === "vigente" : it.s !== "vigente"); }
+
+function arowHtml(it, terms){
+  const meta = [];
+  if (it.d) meta.push((it.s === "vigente" ? "edição vigente " : "última edição ") + abYM(it.d));
+  if (it.nm) meta.push("versão Mercosul (NM)");
+  meta.push(`citada em ${it.ncit} ${it.ncit === 1 ? "documento" : "documentos"}`);
+  const yrs = Object.keys(it.anos || {});
+  if (yrs.length) meta.push("edições citadas: " + yrs.join(", "));
+  const fav = favs.has(abKey(it));
+  const st = it.s === "nf" && !it.sub ? "nf" : it.s;
+  return `<li class="row${it.s!=="vigente"?" old":""}" data-i="${it.i}">
+    <div class="r1"><span class="org abnt">ABNT</span><span class="code">${highlight(abCode(it), terms)}</span><span class="st ${st}">${ST_TXT[st]}</span></div>
+    <div class="tit">${it.t ? highlight(it.t, terms) : `<span style="color:var(--dim)">${it.sub ? "Norma cancelada" : "Não aparece entre as normas vigentes do catálogo — provavelmente cancelada ou substituída"}</span>`}</div>
+    ${it.sub ? `<div class="meta"><span>substituída por <button class="sub-link" data-sub="${esc(it.sub)}">ABNT ${esc(it.sub)}</button></span></div>` : ""}
+    ${it.unif ? `<div class="meta"><span>esta parte foi incorporada à ABNT ${esc(it.unif)} (edição vigente abaixo)</span></div>` : ""}
+    ${it.partes ? `<div class="meta"><span>revisada e dividida em ${it.partes.length} partes:</span>${it.partes.map(p =>
+      `<a href="${esc(p.u)}" target="_blank" rel="noopener" title="${esc(p.t)} · ${abYM(p.d)}" style="color:var(--fg)">${esc(p.k.replace(/^.*-/, "parte "))}</a>`).join("")}</div>` : ""}
+    ${it.res ? `<p class="res">${highlight(it.res, terms)}</p>` : ""}
+    <div class="meta">${meta.map(m => `<span>${esc(m)}</span>`).join("")}</div>
+    <div class="acts">
+      ${it.pdf ? `<a class="ib free" href="${esc(it.pdf)}" target="_blank" rel="noopener" title="PDF integral publicado por órgão público">PDF aberto</a>` : ""}
+      <a class="ib pri" href="${esc(abKey(it))}" target="_blank" rel="noopener" title="Edição vigente, resumo e visualização gratuita (uma vez, com cadastro)">catálogo</a>
+      <a class="ib" href="${CONFEA}" target="_blank" rel="noopener" title="Acesso gratuito para profissionais com registro no CREA (convênio Confea/ABNT)">CREA grátis</a>
+      <button class="ib" data-act="cit" title="Especificações e manuais que citam esta norma">≡ citada por ${it.ncit}</button>
+      <button class="ib" data-act="cp" title="Copiar referência">copiar ref.</button>
+      <button class="ib${fav?" on":""}" data-act="fav" aria-pressed="${fav}" title="Favoritar">${fav?"★":"☆"}</button>
+    </div>
+  </li>`;
+}
+
+function amore(){
+  const terms = aview.terms || [];
+  const next = aview.slice(ashown, ashown + PAGE);
+  $("#alist").insertAdjacentHTML("beforeend", next.map(it => arowHtml(it, terms)).join(""));
+  ashown += next.length;
+  $("#amore").hidden = ashown >= aview.length;
+  $("#amore").textContent = `mostrar mais (${(aview.length - ashown).toLocaleString("pt-BR")} restantes)`;
+  if (!aview.length) {
+    const msg = ast.fav && !AALL.some(it => favs.has(abKey(it))) ? "Nenhuma favorita ainda. Marque com ☆ nos resultados."
+      : !ast.one && !aview.terms.length ? "Nada aqui. Marque “incluir citadas uma vez só” ou tire filtros." : "Nenhuma NBR encontrada. Tente o número (ex.: 7181) ou outra palavra.";
+    $("#alist").innerHTML = `<li class="empty">${msg}</li>`;
+  }
+}
+
+function citHtml(it){
+  const docs = it.cit.map(j => AB.docs[j]).sort((a,b) => (a.s !== "vigente") - (b.s !== "vigente") || a.o.localeCompare(b.o) || a.c.localeCompare(b.c));
+  return `<div class="sim"><h4>Citada nestes documentos do catálogo</h4><ul>` + docs.map(d =>
+    `<li><span class="org ${d.f}">${esc(d.o)}</span><a href="${esc(d.u)}" target="_blank" rel="noopener">${d.c ? `<b>${esc(d.c)}</b> · ` : ""}${esc(d.t)}</a>${d.s !== "vigente" ? `<small>${d.s === "anterior" ? "revisão anterior" : "cancelada"}</small>` : ""}</li>`).join("") + `</ul></div>`;
+}
+
+$("#alist").addEventListener("click", async e => {
+  const sl = e.target.closest(".sub-link");
+  if (sl) { $("#aq").value = ast.q = sl.dataset.sub; ast.st = ""; ast.org = ""; arun(); $("#aq").focus(); return; }
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const li = b.closest(".row"); const it = AALL[+li.dataset.i];
+  if (b.dataset.act === "fav") {
+    const k = abKey(it);
+    favs.has(k) ? favs.delete(k) : favs.add(k);
+    const on = favs.has(k);
+    b.classList.toggle("on", on); b.textContent = on ? "★" : "☆"; b.setAttribute("aria-pressed", on);
+    toast(on ? "favoritada" : "removida das favoritas");
+    saveFavs(); $("#afavn").textContent = AALL.filter(x => favs.has(abKey(x))).length;
+    if (ast.fav && !on) arun();
+  } else if (b.dataset.act === "cp") {
+    const ref = `${abCode(it)}${it.d ? ":" + it.d.slice(0,4) : ""}${it.t ? " — " + it.t : ""}. Associação Brasileira de Normas Técnicas.`;
+    try { await navigator.clipboard.writeText(ref); toast("referência copiada"); } catch { prompt("Copie a referência:", ref); }
+  } else if (b.dataset.act === "cit") {
+    const open = li.querySelector(".sim");
+    if (open) open.remove(); else li.insertAdjacentHTML("beforeend", citHtml(it));
+  }
+});
+
+let adeb;
+$("#aq").addEventListener("input", e => { clearTimeout(adeb); adeb = setTimeout(() => { ast.q = e.target.value; arun(); }, 120); });
+$("#aorgs").addEventListener("click", e => { const b = e.target.closest("[data-o]"); if (!b) return; ast.org = b.dataset.o; arun(); });
+$("#ast").addEventListener("change", e => { ast.st = e.target.value; arun(); });
+$("#aord").addEventListener("change", e => { ast.ord = e.target.value; arun(); });
+$("#aone").addEventListener("change", e => { ast.one = e.target.checked; arun(); });
+$("#afavf").addEventListener("click", e => { ast.fav = !ast.fav; e.currentTarget.setAttribute("aria-pressed", ast.fav); arun(); });
+$("#amore").addEventListener("click", amore);
+$("#aex").addEventListener("click", e => { if (e.target.tagName !== "BUTTON") return; $("#aq").value = ast.q = e.target.textContent; arun(); $("#aq").focus(); });
+
+let abLoading = null;
+function loadAbnt(){ return abLoading || (abLoading = loadAbnt0()); }
+async function loadAbnt0(){
+  try {
+    const r = await fetch("normas/abnt.json", { credentials:"same-origin" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    AB = await r.json();
+  } catch (e) {
+    $("#aerr").hidden = false; $("#aerr").textContent = "Não consegui carregar a lista de normas ABNT (" + e.message + "). Recarregue a página.";
+    $("#an").textContent = "0"; return;
+  }
+  AALL = AB.itens; AALL.forEach(aprep);
+  $("#tn-abnt").textContent = AALL.length.toLocaleString("pt-BR");
+  $("#afavn").textContent = AALL.filter(x => favs.has(abKey(x))).length;
+  $("#aupd").textContent = `${AB.docs_lidos.toLocaleString("pt-BR")} de ${AB.docs_total.toLocaleString("pt-BR")} documentos lidos · ${new Date(AB.gerado_em).toLocaleDateString("pt-BR")}`;
+  if (AB.docs_sem_texto && AB.docs_sem_texto.length) $("#aupd").title = "Sem texto legível (escaneados ou fora do ar):\n" + AB.docs_sem_texto.slice(0, 40).map(d => d.o + " " + d.c).join("\n");
+  arun();
+}
+
+function setTab(t, focus){
+  aba = t === "abnt" ? "abnt" : "rod";
+  $("#tab-rod").setAttribute("aria-selected", aba === "rod");
+  $("#tab-abnt").setAttribute("aria-selected", aba === "abnt");
+  $("#pane-rod").hidden = aba !== "rod";
+  $("#pane-abnt").hidden = aba !== "abnt";
+  $("#h1").innerHTML = aba === "abnt" ? "Normas <span>ABNT</span>" : "Normas <span>Rodoviárias</span>";
+  $("#lead").textContent = aba === "abnt"
+    ? "Todas as NBR citadas nas especificações, ensaios e manuais do DNIT, DER-PR e demais órgãos do catálogo, com edição vigente, situação e quais documentos citam cada uma."
+    : "Busca única nas especificações de serviço, métodos de ensaio, manuais e projetos-padrão do DNIT, DER-PR e outros órgãos estaduais. Cada resultado abre o PDF direto no site oficial.";
+  document.title = aba === "abnt" ? "Normas ABNT" : "Normas Rodoviárias";
+  if (aba === "abnt") loadAbnt();
+  syncUrl();
+  if (focus && !matchMedia("(pointer:coarse)").matches) (aba === "abnt" ? $("#aq") : $("#q")).focus();
+}
+$("#tab-rod").addEventListener("click", () => setTab("rod", true));
+$("#tab-abnt").addEventListener("click", () => setTab("abnt", true));
+$(".tabs").addEventListener("keydown", e => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  setTab(aba === "abnt" ? "rod" : "abnt"); (aba === "abnt" ? $("#tab-abnt") : $("#tab-rod")).focus();
 });
 
 (async function init(){
-  readUrl();
+  const t0 = readUrl();
   try {
     const [r] = await Promise.all([fetch("normas/catalogo.json", { credentials:"same-origin" }), loadFavs()]);
     if (!r.ok) throw new Error("HTTP " + r.status);
@@ -451,8 +742,10 @@ document.addEventListener("keydown", e => {
   $("#upd").textContent = "catálogo de " + d.toLocaleDateString("pt-BR") + (DB.avisos && DB.avisos.length ? " · " + DB.avisos.length + " fonte(s) com aviso na última coleta" : "");
   if (DB.avisos && DB.avisos.length) $("#upd").title = DB.avisos.join("\n");
   $("#srcs").innerHTML = DB.fontes.map(f => `<a href="${esc(f.url)}" target="_blank" rel="noopener"><b>${esc(f.sigla)}</b><span>${esc(f.nome)}</span><em>${f.n.toLocaleString("pt-BR")} docs${f.em ? " · " + f.em.split("-").reverse().join("/") : ""}</em></a>`).join("");
+  $("#tn-rod").textContent = ALL.length.toLocaleString("pt-BR");
   run();
-  if (!matchMedia("(pointer:coarse)").matches) $("#q").focus();
+  setTab(t0, true);
+  if (t0 !== "abnt") loadAbnt();
 })();
 </script>
 </body>

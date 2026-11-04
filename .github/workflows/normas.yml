@@ -1,4 +1,5 @@
 # Atualiza o catálogo do módulo Normas toda segunda-feira (e quando disparado à mão).
+# Depois do catálogo, o coletor ABNT lê os PDFs novos e atualiza a aba "Normas ABNT" (normas/abnt.json).
 # Se uma fonte falhar, o coletor mantém os itens anteriores dela e registra o aviso no catálogo.
 name: Atualizar catálogo de normas
 on:
@@ -10,7 +11,7 @@ permissions:
 jobs:
   coletar:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,10 +19,14 @@ jobs:
           python-version: "3.12"
       - name: Dependências
         run: |
+          sudo apt-get install -y poppler-utils
           pip install requests beautifulsoup4 lxml playwright
           python -m playwright install --with-deps chromium
       - name: Coletar
         run: python normas/coletor/coletar.py
+      - name: Normas ABNT citadas (lê os PDFs novos e confere no catálogo)
+        run: python normas/coletor/abnt.py
+        continue-on-error: true
       - name: Publicar se mudou
         run: |
           python - <<'PY'
@@ -32,10 +37,11 @@ jobs:
           mudou = novo.get("itens") != velho.get("itens") or tira(novo) != tira(velho) or novo.get("avisos") != velho.get("avisos")
           open("mudou", "w").write("1" if mudou else "")
           PY
+          git diff --quiet -- normas/abnt.json || echo 1 > mudou
           if [ -s mudou ]; then
             git config user.name "znl-hub bot"
             git config user.email "actions@users.noreply.github.com"
-            git add normas/catalogo.json
+            git add normas/catalogo.json normas/abnt.json normas/abnt-cache.json
             git commit -m "Normas: catálogo atualizado ($(date -u +%Y-%m-%d))"
             git push
           else
