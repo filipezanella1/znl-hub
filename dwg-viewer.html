@@ -358,31 +358,116 @@ function prepScene(m) {
     const fw = Math.max(m.full[2] - m.full[0], m.full[3] - m.full[1]);
     m.fit = fw > 25 * w ? t : m.full;
   } else m.fit = m.full;
-  buildPaths(m);
+  buildTiles(m);
   buildGrids(m);
 }
 
-function buildPaths(m) {
-  const g = m.geo, groups = new Map();
-  const get = (l, c, k) => { const key = l + '|' + c + '|' + k; let o = groups.get(key); if (!o) { o = { l, c, k, w: k[0] === 'w' ? +k.slice(1) : 0, p: new Path2D() }; groups.set(key, o); } return o.p; };
-  for (let i = 0; i < g.pS.length; i++) {
-    const f = g.pF[i], s = g.pS[i] * 2, n = g.pN[i];
-    const wd = g.pW ? g.pW[i] : 0;
-    const k = (f & 16) ? ((f & 256) ? 'h' : 'f') : (f & 2) ? 'f' : (f & 128) ? 'p' : (f & 8) ? 'x' : wd > 0 ? 'w' + wd : 's';
-    const P = get(g.pL[i], g.pC[i], k);
-    P.moveTo(g.co[s], g.co[s + 1]);
-    for (let j = 1; j < n; j++) P.lineTo(g.co[s + 2 * j], g.co[s + 2 * j + 1]);
-    if ((f & 1) && n > 2) P.closePath();
+// ---------- blocos (tiles) em pirâmide e nível de detalhe ----------
+// O desenho é dividido em trechos pequenos. Para cada nível de zoom há uma grade de blocos de
+// ~256–512 px na tela; cada bloco monta seus caminhos (Path2D) só quando aparece, simplificados
+// para a escala atual (o que fica abaixo de ~0,7 px some). Assim cada quadro desenha poucos
+// caminhos, e só a parte visível.
+const KORD = { h: 0, f: 1, p: 2, w: 3, s: 3, x: 4 };
+const NLEV = 10;
+function polyKind(f, wd) { return (f & 16) ? ((f & 256) ? 'h' : 'f') : (f & 2) ? 'f' : (f & 128) ? 'p' : (f & 8) ? 'x' : wd > 0 ? 'w' + wd : 's'; }
+function buildTiles(m) {
+  const g = m.geo, n = g.pS.length, co = g.co;
+  const [ax, ay, bx, by] = m.full, span = Math.max(bx - ax, by - ay, 1e-9);
+  const bb = new Float64Array(4 * n);
+  for (let i = 0; i < n; i++) {
+    const st = g.pS[i] * 2, c = g.pN[i];
+    let a = Infinity, b = Infinity, cc = -Infinity, d = -Infinity;
+    for (let j = 0; j < c; j++) { const x = co[st + 2 * j], y = co[st + 2 * j + 1]; if (x < a) a = x; if (x > cc) cc = x; if (y < b) b = y; if (y > d) d = y; }
+    bb[4 * i] = a; bb[4 * i + 1] = b; bb[4 * i + 2] = cc; bb[4 * i + 3] = d;
   }
-  const order = { h: 0, f: 1, p: 2, w: 3, s: 3, x: 4 };
-  m.groups = [...groups.values()].sort((a, b) => order[a.k[0]] - order[b.k[0]]);
+  // contornos de uma mesma hachura ficam juntos (o preenchimento evenodd depende disso)
+  for (let i = 0; i < n; i++) {
+    if (!(g.pF[i] & 16) || !(g.pF[i] & 64)) continue;
+    let j = i + 1; while (j < n && (g.pF[j] & 16) && !(g.pF[j] & 64) && g.pE[j] === g.pE[i]) j++;
+    let a = bb[4 * i], b = bb[4 * i + 1], c = bb[4 * i + 2], d = bb[4 * i + 3];
+    for (let k = i + 1; k < j; k++) { a = Math.min(a, bb[4 * k]); b = Math.min(b, bb[4 * k + 1]); c = Math.max(c, bb[4 * k + 2]); d = Math.max(d, bb[4 * k + 3]); }
+    for (let k = i; k < j; k++) { bb[4 * k] = a; bb[4 * k + 1] = b; bb[4 * k + 2] = c; bb[4 * k + 3] = d; }
+  }
+  const cs0 = span / Math.pow(2, NLEV - 1), csSplit = span / 128;
+  const CI = [], C0 = [], C1 = [], CB = [], CL = [];
+  const add = (i, j0, j1, a, b, c, d) => {
+    const w = Math.max(c - a, d - b);
+    CI.push(i); C0.push(j0); C1.push(j1); CB.push(a, b, c, d);
+    CL.push(Math.min(NLEV - 1, Math.max(0, Math.ceil(Math.log2(Math.max(w, 1e-12) / cs0)))));
+  };
+  for (let i = 0; i < n; i++) {
+    const a = bb[4 * i], b = bb[4 * i + 1], c = bb[4 * i + 2], d = bb[4 * i + 3];
+    if (!isFinite(a)) continue;
+    const cnt = g.pN[i], fill = (g.pF[i] & (2 | 16));
+    if (fill || cnt < 3 || Math.max(c - a, d - b) <= csSplit) { add(i, 0, cnt - 1, a, b, c, d); continue; }
+    // linha longa (curva de nível, eixo, bordo): quebra em trechos curtos
+    const st = g.pS[i] * 2; let j0 = 0, A = co[st], B = co[st + 1], C = A, D = B;
+    for (let j = 1; j < cnt; j++) {
+      const x = co[st + 2 * j], y = co[st + 2 * j + 1];
+      const nA = Math.min(A, x), nB = Math.min(B, y), nC = Math.max(C, x), nD = Math.max(D, y);
+      if (Math.max(nC - nA, nD - nB) > csSplit && j - 1 > j0) {
+        add(i, j0, j - 1, A, B, C, D);
+        j0 = j - 1; const px = co[st + 2 * j0], py = co[st + 2 * j0 + 1];
+        A = Math.min(px, x); B = Math.min(py, y); C = Math.max(px, x); D = Math.max(py, y);
+      } else { A = nA; B = nB; C = nC; D = nD; }
+    }
+    if (g.pF[i] & 1) { const x = co[st], y = co[st + 1]; add(i, j0, cnt, Math.min(A, x), Math.min(B, y), Math.max(C, x), Math.max(D, y)); }
+    else add(i, j0, cnt - 1, A, B, C, D);
+  }
+  m.ch = { i: Uint32Array.from(CI), j0: Uint32Array.from(C0), j1: Uint32Array.from(C1), bb: Float64Array.from(CB), lev: Uint8Array.from(CL), cs0, ax, ay };
+  m.pyr = []; m.exc = [];
+  m.pbb = bb;
   // textos: raio de corte
   for (const t of m.tx) {
     const lines = t.s.split('\n'), L = Math.max(...lines.map(s => s.length));
     t.lines = lines; t.rad = t.h * (Math.max(L * 0.75 * t.wf, t.w / t.h || 0) + lines.length * 1.7) + t.h;
   }
 }
-
+// grade do nível L: "pyr" junta tudo que cabe num bloco desse nível; "exc" só o que pertence exatamente a ele
+function levelTiles(m, L, exclusive) {
+  const store = exclusive ? m.exc : m.pyr;
+  if (store[L]) return store[L];
+  const ch = m.ch, cs = ch.cs0 * Math.pow(2, L), map = new Map();
+  for (let k = 0; k < ch.i.length; k++) {
+    const lv = ch.lev[k];
+    if (exclusive ? lv !== L : lv > L) continue;
+    const a = ch.bb[4 * k], b = ch.bb[4 * k + 1], c = ch.bb[4 * k + 2], d = ch.bb[4 * k + 3];
+    const key = Math.floor(((a + c) / 2 - ch.ax) / cs) * 65536 + Math.floor(((b + d) / 2 - ch.ay) / cs);
+    let t = map.get(key);
+    if (!t) { t = { k: [], bb: [Infinity, Infinity, -Infinity, -Infinity], cs, p: new Map() }; map.set(key, t); }
+    t.k.push(k);
+    if (a < t.bb[0]) t.bb[0] = a; if (b < t.bb[1]) t.bb[1] = b; if (c > t.bb[2]) t.bb[2] = c; if (d > t.bb[3]) t.bb[3] = d;
+  }
+  const tiles = [...map.values()];
+  for (const t of tiles) t.k = Uint32Array.from(t.k);
+  return (store[L] = tiles);
+}
+// caminhos de um bloco com tolerância cs/2^q (q >= 12: completo)
+function tilePaths(m, t, q) {
+  let r = t.p.get(q); if (r) return r;
+  const g = m.geo, co = g.co, ch = m.ch, bb = m.pbb, tol = q >= 12 ? 0 : t.cs / Math.pow(2, q);
+  const groups = new Map();
+  for (const k of t.k) {
+    const i = ch.i[k], j0 = ch.j0[k], j1 = ch.j1[k], f = g.pF[i], n = g.pN[i], whole = j0 === 0 && j1 === n - 1;
+    if (tol && !(f & 16) && ch.bb[4 * k + 2] - ch.bb[4 * k] < tol && ch.bb[4 * k + 3] - ch.bb[4 * k + 1] < tol) continue; // menor que ~1 px
+    const wd = g.pW ? g.pW[i] : 0, kind = polyKind(f, wd), key = g.pL[i] + '|' + g.pC[i] + '|' + kind;
+    let G = groups.get(key);
+    if (!G) { G = { l: g.pL[i], c: g.pC[i], k: kind, o: KORD[kind[0]], w: kind[0] === 'w' ? +kind.slice(1) : 0, p: new Path2D() }; groups.set(key, G); }
+    const st = g.pS[i] * 2, P = G.p;
+    let lx = co[st + 2 * j0], ly = co[st + 2 * j0 + 1];
+    P.moveTo(lx, ly);
+    for (let j = j0 + 1; j <= j1; j++) {
+      const jj = j % n, x = co[st + 2 * jj], y = co[st + 2 * jj + 1];  // j1 = n: fechada, volta ao início
+      if (tol && j < j1 && Math.abs(x - lx) + Math.abs(y - ly) < tol) continue;
+      P.lineTo(x, y); lx = x; ly = y;
+    }
+    if (whole && (f & 1) && n > 2) P.closePath();
+  }
+  void bb;
+  r = [...groups.values()].sort((a, b) => a.o - b.o);
+  t.p.set(q, r);
+  return r;
+}
 function buildGrids(m) {
   const g = m.geo, [ax, ay, bx, by] = m.full;
   const nSeg = g.co.length / 2;
@@ -474,27 +559,54 @@ function quickDraw() {
   ctx.drawImage(snapBmp, 0, 0);
   drawSel(true);
 }
-function drawGeom(S, vis, lw) {
+function drawGeom(S, vis, lw, rect, px) {
   ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  for (const G of S.groups) {
-    if (!vis(G.l)) continue;
-    const col = colorCss(G.c, G.l, S);
-    if (G.k === 'f' || G.k === 'h') {
-      ctx.globalAlpha = G.k === 'h' ? 0.22 : 1;
-      ctx.fillStyle = col; ctx.fill(G.p, 'evenodd');
-      ctx.globalAlpha = 1;
-    } else {
-      ctx.strokeStyle = col;
-      if (G.k === 'p') { ctx.globalAlpha = 0.85; ctx.stroke(G.p); ctx.globalAlpha = 1; }
-      else if (G.w) { ctx.lineWidth = Math.max(G.w, lw); ctx.lineCap = 'butt'; ctx.lineJoin = 'miter'; ctx.stroke(G.p); ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; }
-      else ctx.stroke(G.p);
+  // nível com blocos de até ~512 px na tela; acima dele, só o que é maior que esses blocos
+  const cs0 = S.ch.cs0;
+  let Ld = 0; while (Ld < NLEV - 1 && cs0 * Math.pow(2, Ld + 1) * px <= 512) Ld++;
+  const list = [];
+  const take = tiles => {
+    for (const t of tiles) {
+      const b = t.bb;
+      if (b[2] < rect[0] || b[0] > rect[2] || b[3] < rect[1] || b[1] > rect[3]) continue;
+      const q = Math.max(4, Math.ceil(Math.log2(t.cs * px / 0.7)));
+      list.push(tilePaths(S, t, q));
+    }
+  };
+  take(levelTiles(S, Ld, false));
+  for (let L = Ld + 1; L < NLEV; L++) take(levelTiles(S, L, true));
+  for (let pass = 0; pass <= 4; pass++) {
+    for (const groups of list) for (const G of groups) {
+      if (G.o !== pass || !vis(G.l)) continue;
+      const col = colorCss(G.c, G.l, S);
+      if (G.k === 'f' || G.k === 'h') {
+        ctx.globalAlpha = G.k === 'h' ? 0.22 : 1;
+        ctx.fillStyle = col; ctx.fill(G.p, 'evenodd');
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.strokeStyle = col;
+        if (G.k === 'p') { ctx.globalAlpha = 0.85; ctx.stroke(G.p); ctx.globalAlpha = 1; }
+        else if (G.w) { ctx.lineWidth = Math.max(G.w, lw); ctx.lineCap = 'butt'; ctx.lineJoin = 'miter'; ctx.stroke(G.p); ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; }
+        else ctx.stroke(G.p);
+      }
     }
   }
   const P = S.geo.pts, ps = 2 * lw;
   for (let i = 0; i < P.length; i += 5) {
     if (!vis(P[i + 3])) continue;
-    ctx.fillStyle = colorCss(P[i + 2], P[i + 3], S); ctx.fillRect(P[i] - ps, P[i + 1] - ps, ps * 2, ps * 2);
+    const x = P[i], y = P[i + 1];
+    if (x < rect[0] || x > rect[2] || y < rect[1] || y > rect[3]) continue;
+    ctx.fillStyle = colorCss(P[i + 2], P[i + 3], S); ctx.fillRect(x - ps, y - ps, ps * 2, ps * 2);
   }
+}
+// retângulo do desenho (coords da cena) visto por uma transformação cena -> tela, limitado a uma janela da tela
+function viewRect(T, x0, y0, x1, y1) {
+  const det = T.a * T.d - T.b * T.c, xs = [], ys = [];
+  for (const [X, Y] of [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]) {
+    const u = X - T.e, v = Y - T.f;
+    xs.push((T.d * u - T.c * v) / det); ys.push((-T.b * u + T.a * v) / det);
+  }
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 // transformação model (coords relativas) -> tela, para uma viewport de layout
 function vpTransform(v) {
@@ -538,14 +650,16 @@ function render() {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       vpClip(v);
       ctx.setTransform(dpr * T.a, dpr * T.b, dpr * T.c, dpr * T.d, dpr * T.e, dpr * T.f);
-      drawGeom(MODEL, vis, 1 / T.sc);
+      const X0 = Math.max(0, sx(v.cx - v.w / 2)), X1 = Math.min(CW, sx(v.cx + v.w / 2)), Y0 = Math.max(0, sy(v.cy + v.ht / 2)), Y1 = Math.min(CH, sy(v.cy - v.ht / 2));
+      if (X1 <= X0 || Y1 <= Y0) { ctx.restore(); continue; }
+      drawGeom(MODEL, vis, 1 / T.sc, viewRect(T, X0, Y0, X1, Y1), T.sc);
       drawTexts(MODEL, vis, T);
       ctx.restore();
     }
   }
   ctx.setTransform(dpr * s, 0, 0, -dpr * s, dpr * (CW / 2 - view.x * s), dpr * (CH / 2 + view.y * s));
   const vis = l => SC.vis[l];
-  drawGeom(SC, vis, 1 / s);
+  drawGeom(SC, vis, 1 / s, [wx(0), wy(CH), wx(CW), wy(0)], s);
   drawTexts(SC, vis, { a: s, b: 0, c: 0, d: -s, e: CW / 2 - view.x * s, f: CH / 2 + view.y * s, sc: s, rot: 0 });
   drawSel(false);
   lastMs = performance.now() - t0;
@@ -1106,6 +1220,7 @@ async function openFile(file) {
   } finally { busy(''); }
 }
 function setScene(m, fit) {
+  const tPrep = performance.now();
   if (!m.prepped) {
     prepScene(m); m.prepped = true;
     m.usedLayers = new Set(m.geo.pL);
@@ -1124,6 +1239,7 @@ function setScene(m, fit) {
   layersUI();
   if (fit) fitBox(m.fit);
   render(); drawOvl();
+  window.__prepMs = performance.now() - tPrep;
 }
 $('spaces').addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b || b.getAttribute('aria-pressed') === 'true') return;

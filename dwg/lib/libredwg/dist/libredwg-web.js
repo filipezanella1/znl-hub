@@ -1565,12 +1565,9 @@ class LibreEntityConverter {
     const text = this.convertTextBase(entity);
     const tag = libredwg.dwg_dynapi_entity_data(entity, "tag");
     const flags = libredwg.dwg_dynapi_entity_data(entity, "flags");
-    const fieldLength = libredwg.dwg_dynapi_entity_data(entity, "field_length");
-    const lockPositionFlag = libredwg.dwg_dynapi_entity_data(entity, "lock_position_flag");
-    const duplicateRecordCloningFlag = libredwg.dwg_dynapi_entity_data(entity, "keep_duplicate_records");
-    const mtextFlag = libredwg.dwg_dynapi_entity_data(entity, "mtext_type");
-    const isReallyLocked = libredwg.dwg_dynapi_entity_data(entity, "is_really_locked");
-    const alignmentPoint = libredwg.dwg_dynapi_entity_data(entity, "alignment_pt");
+    // DWG Viewer: demais campos do atributo não são usados (economiza chamadas ao WASM)
+    const fieldLength = 0, lockPositionFlag = 0, duplicateRecordCloningFlag = 0, mtextFlag = 0, isReallyLocked = 0;
+    const alignmentPoint = { x: 0, y: 0 };
     return {
       type: "ATTRIB",
       ...commonAttrs,
@@ -1591,7 +1588,7 @@ class LibreEntityConverter {
       // TODO: Set the correct value
       attrTag: "",
       // TODO: Set the correct value
-      mtext: this.convertEmbeddedMText(entity, "ATTDEF_mtext")
+      mtext: null
     };
   }
   convertCircle(entity, commonAttrs) {
@@ -3420,16 +3417,17 @@ class LibreEntityConverter {
     }
     const layer = this.getLayerName(entity);
     const handle = libredwg.dwg_object_entity_get_handle_object(entity);
-    const ownerhandle = libredwg.dwg_object_entity_get_ownerhandle_object(entity);
-    const ownerDictionaryHardId = libredwg.dwg_object_entity_get_xdicobjhandle_object(entity);
-    const lineType = this.getLtypeName(entity);
-    const lineweight = libredwg.dwg_object_entity_get_line_weight(entity);
-    const lineTypeScale = libredwg.dwg_object_entity_get_ltype_scale(entity);
+    // DWG Viewer: o dono é preenchido depois por quem converte o bloco (convertEntities); só lê aqui se for pedido
+    const ownerhandle = { absolute_ref: 0 };
+    // DWG Viewer: xdata, dicionário dono, tipo de linha e espessura não são usados pelo viewer e custam caro em arquivos grandes
+    const lineType = "";
+    const lineweight = 0;
+    const lineTypeScale = 1;
     const isVisible = !libredwg.dwg_object_entity_get_invisible(entity);
-    const xdata = libredwg.dwg_object_entity_get_xdata(entity);
+    const xdata = [];
     return {
       handle: idToString(handle.value),
-      ownerDictionaryHardId: idToString(ownerDictionaryHardId.absolute_ref),
+      ownerDictionaryHardId: "0",
       ownerBlockRecordSoftId: idToString(ownerhandle.absolute_ref),
       layer,
       color: rgbColor,
