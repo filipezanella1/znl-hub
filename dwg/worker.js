@@ -1,13 +1,15 @@
 // DWG Viewer — worker: lê DWG (libredwg), monta a cena 2D e converte versões (acadrust).
-import { LibreDwg, Dwg_File_Type } from './lib/libredwg/dist/libredwg-web.js?v=3';
+import { LibreDwg, Dwg_File_Type } from './lib/libredwg/dist/libredwg-web.js?v=4';
 
 let lib = null, conv = null;
 let DB = null, HMAP = null;           // banco aberto e mapa handle -> entidade
 const base = new URL('./lib/', import.meta.url).href;
 
-async function getLib() {
-  if (!lib) lib = await LibreDwg.create(base + 'libredwg/wasm/');
-  return lib;
+let libP = null;
+function getLib() {
+  if (lib) return Promise.resolve(lib);
+  if (!libP) libP = LibreDwg.create(base + 'libredwg/wasm/').then(l => (lib = l), e => { libP = null; throw e; });
+  return libP;
 }
 async function getConv() {
   if (!conv) {
@@ -18,13 +20,20 @@ async function getConv() {
   return conv;
 }
 
+// Começa a baixar e compilar o leitor assim que a página abre, antes de escolher o arquivo
+getLib().catch(() => { lib = null; });
+
 const post = (id, type, data, transfer) => self.postMessage({ id, type, ...data }, transfer || []);
 
+const TIMES = {};
 function readDb(L, bytes) {
   const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  let t = performance.now();
   const d = L.dwg_read_data(ab, Dwg_File_Type.DWG);
   if (!d) throw new Error('Não foi possível ler o arquivo.');
+  TIMES.read = performance.now() - t; t = performance.now();
   const db = L.convert(d);
+  TIMES.convert = performance.now() - t;
   try { L.dwg_free(d); } catch (_) {}
   return db;
 }
@@ -671,10 +680,13 @@ self.onmessage = async ev => {
       for (const b of DB.tables.BLOCK_RECORD.entries) for (const e of b.entities || []) if (!HMAP.has(e.handle)) HMAP.set(e.handle, e);
       const sp = spaces(DB);
       post(id, 'progress', { msg: 'montando desenho…' });
+      let t0 = performance.now();
       const res = build(DB, sp[0].handle);
+      TIMES.build = performance.now() - t0; t0 = performance.now();
       const p = pack(res);
+      TIMES.pack = performance.now() - t0;
       const h = DB.header || {};
-      post(id, 'scene', { ...p, transfer: undefined, version: srcVer, versionName: versionName(srcVer), spaces: sp, space: sp[0].handle,
+      post(id, 'scene', { ...p, transfer: undefined, times: { ...TIMES }, version: srcVer, versionName: versionName(srcVer), spaces: sp, space: sp[0].handle,
         insunits: h.INSUNITS, nEnt: DB.entities.length, ltscale: h.LTSCALE }, p.transfer);
     } else if (cmd === 'space') {
       const res = build(DB, ev.data.handle);
