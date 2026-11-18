@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="pt-BR" data-type="software" data-radius="sharp" data-buttons="solid" data-motion>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>ZNL Hub: as ferramentas de obra do Filipe num lugar só</title>
+<meta name="description" content="Central de acesso aos apps da obra PR-990: medição, normas, PDFs, desenhos e relatórios, igual no celular e no computador.">
+<meta name="theme-color" content="#050806">
+<meta name="site-kind" content="software">
+<meta name="page-type" content="software">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400..700&family=JetBrains+Mono:wght@400..500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/system.css">
+<link rel="stylesheet" href="assets/ui/cards.css">
+<link rel="stylesheet" href="assets/motion/motion.css">
+<link rel="stylesheet" href="assets/icons/icon.css">
+<link rel="stylesheet" href="assets/diagrams/diagram.css">
+<!-- taste-skill 2.5.1 · tipo software · cores do próprio hub via start.mjs brand (fósforo verde sobre quase-preto) · Manrope + JetBrains Mono · raio sharp -->
+<style>
+:root {
+  --p-bg: #050806; --p-surface: #0b140e; --p-ink: #d6f5df; --p-muted: #7fae8d;
+  --p-accent: #3dff7a; --p-accent-ink: #050806; --p-action: #3dff7a; --p-action-ink: #050806;
+  --p-inv-bg: #d6f5df; --p-inv-surface: #c5e2cd; --p-inv-ink: #050806; --p-inv-muted: #49564d;
+  --p-inv-accent: #050806; --p-inv-accent-ink: #d6f5df; --p-inv-action: #050806; --p-inv-action-ink: #d6f5df;
+  --font-display: "Manrope", system-ui, sans-serif;
+  --font-text: "Manrope", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --display-weight: 500;
+  --display-tracking: -0.035em;
+  --display-tracking-xl: -0.045em;
+  --ly-scale: 0.97;
+  color-scheme: dark;
+}
+</style>
+<script>document.documentElement.classList.add('m-enter');setTimeout(()=>document.documentElement.classList.add('m-enter-done'),700)</script>
+<!-- CSS da página: só o que é do hub (barra de status, cartões de módulo, terminal) -->
+<style>
+  /* o hub é ferramenta, não landing page: as seções têm a altura do que contêm */
+  main > section { height: auto !important; min-height: 0 !important; }
+  main > section > .wrap { height: auto !important; }
+  /* chão iluminado do diagrama no verde do hub, em vez da areia padrão do kit */
+  :root { --ground-bg: #0d1912; --ground-surface: #12221a; --ground-ink: #d6f5df; --ground-muted: #7fae8d; --ground-accent: #3dff7a; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--font-text); }
+  [hidden] { display: none !important; }
+  .ico { display: inline-block; width: 20px; height: 20px; flex: none; background: currentColor;
+         -webkit-mask: var(--i) center / contain no-repeat; mask: var(--i) center / contain no-repeat; }
+
+  /* barra de status */
+  .bar { position: sticky; top: 0; z-index: 20; background: color-mix(in oklab, var(--bg) 92%, transparent);
+         backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+  .bar__in { display: flex; align-items: center; gap: var(--s-5); min-height: 56px; flex-wrap: wrap; }
+  .logo { font: 500 18px/1 var(--font-mono); letter-spacing: -0.02em; color: var(--ink); text-decoration: none; }
+  .logo b { color: var(--accent); font-weight: 500; }
+  .stat-row { display: flex; gap: var(--s-4); align-items: center; font: 400 13px/1 var(--font-mono); color: var(--muted);
+              font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+  .stat-row b { color: var(--ink); font-weight: 400; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; margin-right: 6px; }
+  #sync.warn { color: #ffb347; } #sync.err { color: #ff6b6b; }
+  .bar .sp { flex: 1; }
+
+  /* abertura */
+  .hero { padding-block: var(--s-9) var(--s-8); }
+  .hero__grid { align-items: center; }
+  .hero h1 { font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: var(--display-tracking-xl);
+             font-size: clamp(40px, 4.2vw, 64px); line-height: 1.02; margin: var(--s-4) 0 var(--s-5); max-width: 15ch; }
+  .hero .t-lead { color: var(--muted); max-width: 46ch; margin: 0 0 var(--s-6); }
+  .kicker { font: 400 13px/1.4 var(--font-mono); color: var(--accent); }
+  .cmdk { display: flex; align-items: center; gap: var(--s-3); height: 56px; padding: 0 var(--s-4);
+          border: 1px solid var(--line-strong); background: var(--surface); max-width: 520px; }
+  .cmdk:focus-within { border-color: var(--accent); }
+  .cmdk input { flex: 1; min-width: 0; background: none; border: 0; outline: none; color: var(--ink);
+                font: 400 16px/1 var(--font-text); }
+  .cmdk input::placeholder { color: var(--muted); }
+  kbd { font: 400 12px/1 var(--font-mono); border: 1px solid var(--line-strong); padding: 4px 6px; color: var(--muted); }
+  .hero .btn-row { margin-top: var(--s-5); }
+  .dg-card { padding: 0; overflow: hidden; }
+  .dg-card .panel { --p-h: 400px; border: 0; }
+  .dg-card__head { display: flex; justify-content: space-between; padding: var(--s-4) var(--s-5); border-bottom: 1px solid var(--line);
+                   font: 400 13px/1 var(--font-mono); color: var(--muted); }
+
+  /* módulos */
+  .sec { padding-block: var(--s-8); border-top: 1px solid var(--line); }
+  .sec__head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--s-4); margin-bottom: var(--s-6); }
+  .sec h2 { font-family: var(--font-display); font-weight: var(--display-weight); letter-spacing: var(--display-tracking);
+            font-size: clamp(28px, 2.4vw, 40px); line-height: 1.1; margin: 0; }
+  .filters { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+  .filters button { font: 500 13px/1 var(--font-text); height: 36px; padding: 0 var(--s-4); background: transparent;
+                    color: var(--muted); border: 1px solid var(--line); cursor: pointer; }
+  .filters button:hover { color: var(--ink); border-color: var(--line-strong); }
+  .filters button[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+  .mods { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--s-4); }
+  .mod { position: relative; text-decoration: none; color: inherit; min-height: 188px; gap: var(--s-3); }
+  .mod:hover, .mod:focus-visible { border-color: color-mix(in oklab, var(--accent) 55%, var(--line)); }
+  .mod__top { display: flex; align-items: center; justify-content: space-between; }
+  .mod__ic { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--bg); color: var(--accent); }
+  .mod__ic img { width: 26px; height: 26px; }
+  .mod__ic .ico { width: 22px; height: 22px; }
+  .mod__n { font: 400 13px/1 var(--font-mono); color: var(--muted); }
+  .mod h3 { font: 500 var(--t-card)/1.25 var(--font-text); margin: var(--s-1) 0 0; letter-spacing: -0.01em; }
+  .mod p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.5; flex: 1; }
+  .mod__foot { display: flex; justify-content: space-between; align-items: center; font: 400 13px/1 var(--font-mono); color: var(--muted); }
+  .mod__foot .go { width: 16px; height: 16px; transition: transform var(--m-in, 150ms) var(--ease); }
+  .mod:hover .go { transform: translate(3px, -3px); color: var(--accent); }
+  .tag-dev { color: #ffb347; }
+  .mod-w { position: relative; }
+  .rm { position: absolute; top: 12px; right: 12px; z-index: 2; font: 400 12px/1 var(--font-mono); height: 28px; padding: 0 8px;
+        background: var(--bg); color: var(--muted); border: 1px solid var(--line); cursor: pointer; opacity: 0; }
+  .mod-w:hover .rm, .rm:focus-visible, .rm[data-arm] { opacity: 1; }
+  .rm[data-arm] { color: #ff6b6b; border-color: #ff6b6b; }
+  .mod--add { align-items: center; justify-content: center; border-style: dashed; color: var(--muted); cursor: pointer; font: inherit; width: 100%; }
+  .mod--add:hover { color: var(--ink); }
+  .empty { color: var(--muted); font: 400 14px/1.5 var(--font-mono); }
+
+  /* formulário */
+  .addp { border: 1px solid var(--accent); background: var(--surface); padding: var(--s-6); margin-bottom: var(--s-6); }
+  .addp h3 { margin: 0 0 var(--s-4); font: 500 var(--t-card)/1.2 var(--font-text); }
+  .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s-4); margin-bottom: var(--s-4); }
+  .field label { font-size: 13px; color: var(--muted); }
+  .form-err { color: #ff6b6b; min-height: 1.2em; margin: 0 0 var(--s-3); font-size: 14px; }
+
+  /* terminal */
+  .term { border: 1px solid var(--line); background: #030604; display: flex; flex-direction: column; height: 420px; }
+  .term__bar { display: flex; gap: 6px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line);
+               font: 400 13px/1 var(--font-mono); color: var(--muted); }
+  .term__bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); }
+  .term__bar span { margin-left: auto; }
+  #out { flex: 1; overflow-y: auto; padding: 12px 16px; font: 400 13.5px/1.6 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; min-height: 0; }
+  #out .ok { color: var(--accent); } #out .warn { color: #ffb347; } #out .err { color: #ff6b6b; } #out .dim { color: var(--muted); }
+  #out a { color: #ffb347; }
+  .prompt { display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding: 10px 16px; }
+  .prompt label { color: var(--accent); white-space: nowrap; font: 400 13.5px/1 var(--font-mono); }
+  #cmd { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--ink); font: 400 13.5px/1 var(--font-mono); caret-color: var(--accent); outline: none; }
+  .term-side h2 { margin-bottom: var(--s-4); }
+  .term-side p { color: var(--muted); max-width: 40ch; }
+  .term-side ul { list-style: none; padding: 0; margin: var(--s-5) 0 0; display: grid; gap: var(--s-3); font: 400 14px/1.4 var(--font-mono); }
+  .term-side code { color: var(--accent); }
+
+  footer { border-top: 1px solid var(--line); padding-block: var(--s-6); color: var(--muted); font-size: 14px; }
+
+  @media (max-width: 899px) {
+    .hero { padding-block: var(--s-7) var(--s-6); }
+    .dg-card .panel { --p-h: 300px; }
+    .bar .hide-s { display: none; }
+  }
+  @media (max-width: 639px) {
+    .cmdk { max-width: none; }
+    .hero .btn-row .btn { flex: 1; }
+    .term { height: 360px; }
+    .rm { opacity: 1; }
+    .mod__n { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap bar__in">
+    <a class="skip-link" href="#top">Pular para o conteúdo</a>
+    <a class="logo" href="#top">ZNL<b>://</b>HUB</a>
+    <div class="stat-row" role="status">
+      <span><span class="dot" aria-hidden="true"></span><b>online</b></span>
+      <span class="hide-s">dados <b id="sync">…</b></span>
+      <span class="hide-s">módulos <b id="count">0</b></span>
+      <span>BRT <b id="clock">--:--</b></span>
+    </div>
+    <span class="sp"></span>
+    <a id="logout" class="btn btn--secondary btn--sm" href="/logout" hidden><span class="ico" style="--i:url(assets/icons/ui-log-out.svg)" aria-hidden="true"></span>Sair</a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" data-enter aria-labelledby="hero-h">
+    <div class="wrap grid hero__grid">
+      <div class="span-6">
+        <p class="kicker">filipe@znl-hub · obra 515 · PR-990</p>
+        <h1 id="hero-h">Suas ferramentas de obra, a um atalho de distância.</h1>
+        <p class="t-lead"><span id="countLead">11</span> módulos de medição, normas, PDF e desenho num painel só, iguais no celular e no computador.</p>
+        <form class="cmdk" id="findForm" role="search">
+          <span class="ico" style="--i:url(assets/icons/ui-search.svg)" aria-hidden="true"></span>
+          <label class="sr-only" for="find">Buscar um módulo</label>
+          <input id="find" placeholder="Buscar módulo: dro, normas, pdf…" autocomplete="off" spellcheck="false">
+          <kbd>/</kbd>
+        </form>
+        <div class="btn-row">
+          <a class="btn btn--primary" href="#modulos" id="openFirst">Abrir um módulo</a>
+          <a class="btn btn--secondary" href="#terminal"><span class="ico" style="--i:url(assets/icons/ui-terminal.svg)" aria-hidden="true"></span>Usar o terminal</a>
+        </div>
+      </div>
+      <div class="span-6">
+        <div class="card dg-card m-nolift">
+          <div class="dg-card__head"><span>znl-hub · mapa</span><span>nuvem KV · senha</span></div>
+          <div class="panel"><div class="dg" data-diagram><script type="application/json">
+{"layout":"hub","alt":"O ZNL Hub liga o Painel TCE, a obra PR-990, a medição do DRO, as normas, o PDF Studio, o DWG Viewer e o relatório fotográfico.",
+ "center":{"label":"ZNL Hub","icon":"ui:terminal"},
+ "spokes":[
+  {"label":"Painel TCE","icon":"ui:layout-dashboard"},
+  {"label":"PR-990","icon":"ui:route"},
+  {"label":"Medição DRO","icon":"xlsx"},
+  {"label":"Normas","icon":"ui:book-open"},
+  {"label":"PDF Studio","icon":"pdf"},
+  {"label":"DWG Viewer","icon":"si:autocad"},
+  {"label":"Relatório","icon":"pptx"}
+ ],
+ "motion":{"cycle":3.2}}
+          </script></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="modulos" aria-labelledby="mods-h">
+    <div class="wrap">
+      <div class="sec__head">
+        <h2 id="mods-h">Módulos</h2>
+        <div class="filters" id="filters" role="group" aria-label="Filtrar por tipo"></div>
+      </div>
+
+      <section id="addPanel" class="addp" hidden aria-labelledby="addTitle">
+        <h3 id="addTitle">Registrar novo módulo</h3>
+        <form id="addForm" novalidate>
+          <div class="fields">
+            <div class="field"><label for="f-name">Nome</label><input id="f-name" maxlength="28" placeholder="Controle de prazos" required></div>
+            <div class="field"><label for="f-url">Endereço</label><input id="f-url" placeholder="https://meu-app.pages.dev" required></div>
+            <div class="field"><label for="f-desc">Descrição curta</label><input id="f-desc" maxlength="90" placeholder="O que essa ferramenta faz"></div>
+            <div class="field"><label for="f-tag">Tipo</label>
+              <select id="f-tag"><option>dashboard</option><option>app</option><option>calculadora</option><option>relatório</option><option>utilitário</option><option>consulta</option></select></div>
+            <div class="field"><label for="f-status">Situação</label>
+              <select id="f-status"><option value="on">online</option><option value="dev">em construção</option></select></div>
+          </div>
+          <p class="form-err" id="formErr" aria-live="polite"></p>
+          <div class="btn-row"><button class="btn btn--primary" type="submit">Registrar módulo</button><button class="btn btn--secondary" type="button" id="cancelAdd">Cancelar</button></div>
+        </form>
+      </section>
+
+      <div class="mods" id="tiles"></div>
+    </div>
+  </section>
+
+  <section class="sec" id="terminal" aria-labelledby="term-h">
+    <div class="wrap grid">
+      <div class="span-4 term-side">
+        <h2 id="term-h">Terminal</h2>
+        <p>Para quem prefere o teclado: abra, liste e registre módulos sem tirar a mão das teclas.</p>
+        <ul>
+          <li><code>3</code> abre o módulo 3</li>
+          <li><code>open normas</code> abre pelo nome</li>
+          <li><code>claude &lt;pedido&gt;</code> conversa já com o pedido</li>
+          <li><code>help</code> lista todos os comandos</li>
+        </ul>
+      </div>
+      <div class="span-8">
+        <div class="term">
+          <div class="term__bar"><i></i><i></i><i></i><span>filipe@znl-hub: ~</span></div>
+          <div id="out" aria-live="polite"></div>
+          <form class="prompt" id="cmdForm" autocomplete="off">
+            <label for="cmd">~$</label>
+            <input id="cmd" spellcheck="false" autocapitalize="off" placeholder="help">
+          </form>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">Os módulos ficam salvos na nuvem do hub e aparecem iguais em todos os aparelhos em que você entrar com a senha. Ícones: Lucide (ISC), VSCode Icons (MIT), Simple Icons e SVG Logos (CC0).</div>
+</footer>
+
+<script type="module" src="assets/motion/motion.js"></script>
+<script type="module" src="assets/diagrams/mount.js"></script>
+<script>
+(function(){
+  const DEFAULTS = [
+    { id:"painel-tce", name:"Painel TCE", url:"https://painel-tce.pages.dev", desc:"Painel de acompanhamento publicado no Cloudflare Pages.", tag:"dashboard", status:"on" },
+    { id:"pr990", name:"Obra completa PR990", url:"https://filipezanella1.github.io/PR990-Obra-completa/", desc:"Acompanhamento da obra completa da PR-990.", tag:"dashboard", status:"on" },
+    { id:"medicao-dro", name:"Medição → DRO", url:"../medicao-dro.html", desc:"Roteiro mensal do DRO da obra 515: lê medição do DER, NF e CEQ e gera tudo pronto para colar.", tag:"app", status:"on" },
+    { id:"pdf-studio", name:"PDF Studio", url:"../pdf-studio.html", desc:"Juntar, organizar, dividir, girar, recortar e editar PDFs; números de página e marca d'água.", tag:"utilitário", status:"on" },
+    { id:"validacao-terceiros", name:"Validação de Terceiros", url:"../validacao-terceiros.html", desc:"Confere a parte diária dos terceiros contra o Painel TCE e aponta alertas: grave, médio e avaliar.", tag:"app", status:"on" },
+    { id:"normas", name:"Normas Rodoviárias", url:"../normas.html", desc:"Especificações, ensaios e manuais do DNIT, DER-PR, DER-SP, DER-MG e SINFRA-MT, com o PDF oficial.", tag:"consulta", status:"on" },
+    { id:"dwg-viewer", name:"DWG Viewer", url:"../dwg-viewer.html", desc:"Abre DWG/DXF no navegador: medidas com snap, handles, coordenadas, camadas e conversão para 2010.", tag:"utilitário", status:"on" },
+    { id:"gods-eye-view", name:"God's Eye View", url:"../gods-eye-view.html", desc:"Globo 3D com aviões, navios, satélites e câmeras ao vivo.", tag:"externo", status:"on" },
+    { id:"conversor-txt", name:"Conversor TXT", url:"../conversor-txt.html", desc:"TXT de pontos da estação total ou GPS no padrão rachão: Nº;DESCRIÇÃO;Y;X;Z.", tag:"utilitário", status:"on" },
+    { id:"mister-dm", name:"Mister Download Manager", url:"https://github.com/anefzaoui/misterdownloadmanager/releases/latest", desc:"Gerenciador de downloads para Windows, Mac e Linux.", tag:"programa", status:"on" },
+    { id:"claude", name:"Claude", url:"https://claude.ai/new", desc:"Abre uma conversa com o Claude. No terminal: claude <seu pedido>.", tag:"assistente", status:"on" }
+  ];
+  // ícone de cada módulo: pelo id, pelo endereço ou pelo tipo
+  const ICON_ID = { "painel-tce":"ui:layout-dashboard", "pr990":"ui:route", "medicao-dro":"xlsx", "pdf-studio":"pdf",
+    "validacao-terceiros":"ui:truck", "normas":"ui:book-open", "dwg-viewer":"autocad", "gods-eye-view":"ui:globe",
+    "conversor-txt":"txt", "mister-dm":"ui:download", "claude":"claude", "relatorio-fotografico":"pptx" };
+  const ICON_URL = [[/relatorio/,"pptx"],[/pdf/,"pdf"],[/dwg/,"autocad"],[/normas/,"ui:book-open"],[/medicao|dro/,"xlsx"],[/painel/,"ui:layout-dashboard"],[/pr990/i,"ui:route"]];
+  const ICON_TAG = { dashboard:"ui:layout-dashboard", consulta:"ui:book-open", relatório:"pptx", programa:"ui:download" };
+  function iconOf(t){
+    let id = ICON_ID[t.id] || (ICON_URL.find(([re])=>re.test(String(t.url).toLowerCase()))||[])[1] || ICON_TAG[t.tag] || "ui:app-window";
+    if(id.startsWith("ui:")) return `<span class="ico" style="--i:url(assets/icons/ui-${id.slice(3)}.svg)" aria-hidden="true"></span>`;
+    return `<img src="assets/icons/${id}.svg" alt="" width="26" height="26">`;
+  }
+
+  const norm = u => String(u||"").replace(/\/+$/,"").toLowerCase();
+  const CACHE = "znl.cache.v2";
+  const ls = { get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+               set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} } };
+  // a lista da nuvem guarda endereços relativos à raiz (medicao-dro.html); esta prévia mora em /proposta/
+  const fix = u => (/^https?:|^\/|^\.\.\//i.test(u) ? u : "../" + u);
+  let tools = ls.get(CACHE) || DEFAULTS.slice();
+  let cloud = false, filter = "todos";
+  const all = () => tools;
+  const $ = s => document.querySelector(s);
+  const setSync = (text, cls) => { const el=$("#sync"); el.textContent=text; el.className=cls||""; };
+
+  async function load(){
+    setSync("conectando…","warn");
+    try{
+      const r = await fetch("/api/tools",{credentials:"same-origin",cache:"no-store"});
+      if(r.status===401){ location.href="/login"; return; }
+      if(!r.ok || !(r.headers.get("content-type")||"").includes("json")) throw new Error(r.status);
+      const data = await r.json();
+      cloud = true; $("#logout").hidden = false;
+      tools = Array.isArray(data.tools) && data.tools.length ? data.tools : DEFAULTS.slice();
+      ls.set(CACHE, tools); setSync("nuvem ✓","ok");
+      log(`${tools.length} módulo(s) sincronizado(s) com a nuvem.`,"dim");
+    }catch(e){
+      cloud = false; setSync("só local","warn");
+      log("! sem conexão com a nuvem do hub: mudanças ficam só neste navegador.","warn");
+    }
+    render();
+  }
+  async function save(){
+    ls.set(CACHE, tools);
+    if(!cloud) return true;
+    setSync("salvando…","warn");
+    try{
+      const r = await fetch("/api/tools",{method:"PUT",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({tools})});
+      if(r.status===401){ location.href="/login"; return false; }
+      if(!r.ok) throw new Error(r.status);
+      setSync("nuvem ✓","ok"); return true;
+    }catch(e){ setSync("erro ao salvar","err"); log("! não consegui salvar na nuvem. Use o comando sync.","err"); return false; }
+  }
+
+  const tilesEl = $("#tiles"), out = $("#out"), cmd = $("#cmd"), find = $("#find");
+  const host = u => /^https?:/i.test(u) ? (()=>{ try{ return new URL(u).host; }catch(e){ return u; } })() : "hub/" + String(u).replace(/^\.\.\//,"").replace(/\.html?$/,"");
+  const pad = n => String(n).padStart(2,"0");
+  const esc = s => String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  function visible(){
+    const q = find.value.trim().toLowerCase();
+    return all().map((t,i)=>({t,i})).filter(({t})=>
+      (filter==="todos"||t.tag===filter) && (!q || (t.name+" "+t.tag+" "+(t.desc||"")+" "+t.id).toLowerCase().includes(q)));
+  }
+  function renderFilters(){
+    const tags = ["todos", ...new Set(all().map(t=>t.tag||"app"))];
+    if(!tags.includes(filter)) filter="todos";
+    $("#filters").innerHTML = tags.map(t=>`<button type="button" aria-pressed="${t===filter}" data-f="${esc(t)}">${esc(t[0].toUpperCase()+t.slice(1))}</button>`).join("");
+    $("#filters").querySelectorAll("button").forEach(b=>b.onclick=()=>{ filter=b.dataset.f; render(); });
+  }
+  function render(){
+    $("#count").textContent = all().length; $("#countLead").textContent = all().length;
+    renderFilters();
+    const rows = visible();
+    tilesEl.innerHTML = (rows.length ? "" : `<p class="empty">Nenhum módulo com “${esc(find.value)}”. Tente outra palavra.</p>`) +
+      rows.map(({t,i})=>`
+      <div class="mod-w">
+        <a class="card mod" href="${esc(fix(t.url))}" target="_blank" rel="noopener" data-i="${i}">
+          <div class="mod__top"><span class="mod__ic">${iconOf(t)}</span><span class="mod__n">${i<9?`<kbd>${i+1}</kbd>`:pad(i+1)}</span></div>
+          <h3>${esc(t.name)}</h3>
+          <p>${esc(t.desc||"Sem descrição.")}</p>
+          <div class="mod__foot"><span class="${t.status==="dev"?"tag-dev":""}">${t.status==="dev"?"em obra":esc(t.tag||"app")} · ${esc(host(fix(t.url)))}</span>
+            <span class="ico go" style="--i:url(assets/icons/ui-arrow-up-right.svg)" aria-hidden="true"></span></div>
+        </a>
+        <button class="rm" type="button" data-del="${i}" aria-label="Remover ${esc(t.name)}">remover</button>
+      </div>`).join("") +
+      `<div class="mod-w"><button class="card mod mod--add" id="addTile" type="button"><span class="ico" style="--i:url(assets/icons/ui-plus.svg)" aria-hidden="true"></span>Registrar módulo</button></div>`;
+    $("#addTile").onclick = openAdd;
+    tilesEl.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+      if(b.dataset.arm){ removeAt(+b.dataset.del); return; }
+      b.dataset.arm="1"; b.textContent="confirmar?";
+      setTimeout(()=>{ if(b.isConnected){ delete b.dataset.arm; b.textContent="remover"; } },3000);
+    });
+  }
+  find.addEventListener("input", render);
+  $("#findForm").addEventListener("submit", e=>{ e.preventDefault(); const r=visible(); if(r.length) openAt(r[0].i); });
+  $("#openFirst").addEventListener("click", e=>{ if(find.value.trim()){ e.preventDefault(); const r=visible(); if(r.length) openAt(r[0].i); } });
+
+  function log(text, cls){ const d=document.createElement("div"); if(cls) d.className=cls; d.innerHTML=text; out.appendChild(d); out.scrollTop=out.scrollHeight; }
+  function findIdx(arg){
+    const list = all(); if(!arg) return -1;
+    const n = parseInt(arg,10);
+    if(!isNaN(n) && n>=1 && n<=list.length) return n-1;
+    const q = arg.toLowerCase();
+    return list.findIndex(t=>t.name.toLowerCase().includes(q)||t.id===q);
+  }
+  function openAt(i){
+    const t = all()[i]; if(!t) return;
+    const url = fix(t.url);
+    log(`> abrindo <b>${esc(t.name)}</b> [${esc(host(url))}] … <span class="ok">ok</span>`, "ok");
+    window.open(url, "_blank", "noopener");
+  }
+  let pendingRm = -1;
+  function removeAt(i){ const t = all()[i]; if(!t) return; tools = tools.filter((_,j)=>j!==i); render(); save(); log(`- módulo ${esc(t.name)} removido.`,"warn"); }
+  const HELP = [["ls [filtro]","lista os módulos"],["open &lt;n|nome&gt;","abre uma ferramenta (atalho: só o número)"],["add","registra um novo módulo"],
+    ["rm &lt;n&gt;","remove um módulo"],["sync","recarrega a lista da nuvem"],["logout","sai do hub neste aparelho"],["export","copia a lista em JSON"],
+    ["claude &lt;pedido&gt;","abre uma conversa com o Claude"],["whoami · date · clear","utilitários"]];
+  const cmds = {
+    help(){ log("comandos disponíveis:","dim"); HELP.forEach(([c,d])=>log(`  <span class="ok">${c.padEnd(22," ")}</span>${d}`)); },
+    ls(arg){ const q=(arg||"").toLowerCase(); const rows=all().map((t,i)=>({t,i})).filter(({t})=>!q||(t.name+t.tag+t.desc).toLowerCase().includes(q));
+      if(!rows.length) return log("nenhum módulo encontrado.","warn");
+      rows.forEach(({t,i})=>log(`  <span class="warn">[${pad(i+1)}]</span> ${esc(t.name.padEnd(24," "))} <span class="dim">${esc(t.tag||"")}</span>`)); },
+    open(arg){ const i=findIdx(arg); i<0 ? log(`! módulo não encontrado: ${esc(arg||"(vazio)")}. Use ls.`,"err") : openAt(i); },
+    add(){ openAdd(); log("> formulário de registro aberto em Módulos.","dim"); },
+    rm(arg){ const i=findIdx(arg); if(i<0) return log("! informe o número do módulo. Ex.: rm 2","err");
+      if(pendingRm===i){ pendingRm=-1; return removeAt(i); } pendingRm=i; log(`? confirme repetindo: rm ${i+1}`,"warn"); },
+    export(){ const json=JSON.stringify(all(),null,2); try{ navigator.clipboard.writeText(json).then(()=>log("+ lista copiada como backup.","ok"),()=>log(esc(json),"dim")); }catch(e){ log(esc(json),"dim"); } },
+    claude(arg){ const apps=all().filter(t=>t.id!=="claude").map(t=>`- ${t.name}: ${t.url}`).join("\n");
+      const url="https://claude.ai/new"+(arg?"?q="+encodeURIComponent(`${arg}\n\n(Enviado pelo ZNL Hub. Meus apps:\n${apps})`):"");
+      log("> abrindo conversa com o Claude…","ok"); window.open(url,"_blank","noopener"); },
+    sync(){ load(); },
+    logout(){ cloud ? (location.href="/logout") : log("! você não está conectado à nuvem do hub.","warn"); },
+    whoami(){ log("filipe · operador do znl-hub","ok"); },
+    date(){ log(new Date().toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",dateStyle:"full",timeStyle:"medium"})); },
+    clear(){ out.innerHTML=""; }
+  };
+  const hist=[]; let hp=0;
+  $("#cmdForm").addEventListener("submit",e=>{
+    e.preventDefault(); const raw=cmd.value.trim(); cmd.value=""; if(!raw) return;
+    hist.push(raw); hp=hist.length; log(`<span class="ok">$</span> ${esc(raw)}`);
+    const [c,...rest]=raw.split(/\s+/); const arg=rest.join(" ");
+    if(/^\d+$/.test(c)) return cmds.open(c);
+    if(c!=="rm") pendingRm=-1;
+    const fn=cmds[c.toLowerCase()]; fn ? fn(arg) : log(`! comando desconhecido: ${esc(c)}. Digite help.`,"err");
+  });
+  cmd.addEventListener("keydown",e=>{
+    if(e.key==="ArrowUp"&&hist.length){ hp=Math.max(0,hp-1); cmd.value=hist[hp]; e.preventDefault(); }
+    if(e.key==="ArrowDown"&&hist.length){ hp=Math.min(hist.length,hp+1); cmd.value=hist[hp]||""; e.preventDefault(); }
+  });
+
+  const panel=$("#addPanel");
+  function openAdd(){ panel.hidden=false; $("#formErr").textContent=""; panel.scrollIntoView({block:"nearest"}); $("#f-name").focus(); }
+  $("#cancelAdd").onclick=()=>{ panel.hidden=true; };
+  $("#addForm").addEventListener("submit",e=>{
+    e.preventDefault();
+    const name=$("#f-name").value.trim(); let url=$("#f-url").value.trim();
+    if(!name) return $("#formErr").textContent="Dê um nome ao módulo.";
+    if(url && !/^https?:\/\//i.test(url) && !/^[\w\-\/.]+\.html?$/i.test(url)) url="https://"+url;
+    try{ new URL(url, location.href); }catch(_){ return $("#formErr").textContent="Endereço inválido. Ex.: https://meu-app.pages.dev"; }
+    tools.push({ id:"m"+Date.now(), name, url, desc:$("#f-desc").value.trim(), tag:$("#f-tag").value, status:$("#f-status").value });
+    render(); save(); e.target.reset(); panel.hidden=true;
+    log(`+ módulo <b>${esc(name)}</b> registrado como [${pad(all().length)}].`,"ok");
+  });
+
+  document.addEventListener("keydown",e=>{
+    const typing = /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if(e.key==="/"&&!typing){ e.preventDefault(); find.focus(); return; }
+    if(e.key==="Escape"&&document.activeElement===find){ find.value=""; render(); find.blur(); return; }
+    if(typing||e.metaKey||e.ctrlKey||e.altKey) return;
+    if(/^[1-9]$/.test(e.key)){ const i=+e.key-1; if(i<all().length){ e.preventDefault(); openAt(i); } }
+  });
+
+  const clock=()=>{ $("#clock").textContent=new Date().toLocaleTimeString("pt-BR",{timeZone:"America/Sao_Paulo",hour:"2-digit",minute:"2-digit"}); };
+  clock(); setInterval(clock, 15000);
+  log("ZNL Hub · digite <span class=\"ok\">help</span> para ver os comandos.","dim");
+  render(); load();
+})();
+</script>
+</body>
+</html>
