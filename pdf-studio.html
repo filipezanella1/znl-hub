@@ -107,6 +107,11 @@ input[type=file]{display:none}
 .frow input:not([type=checkbox]){flex:1 1 200px;min-width:0;font:600 13px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 8px}
 .frow select{font:600 12px var(--mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 6px;max-width:100%}
 .frow .fnote{font-size:11px}
+.mdbox{display:grid;gap:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);padding:10px}
+.mdbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font:500 12px var(--mono);color:var(--dim)}
+.mdinfo{min-width:0;overflow-wrap:anywhere} .mdinfo b{color:var(--fg);font-weight:600} .mdsp{flex:1}
+#mdOut{width:100%;min-height:320px;resize:vertical;font:13px/1.55 var(--mono);background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:10px 12px;tab-size:2}
+#mdOut:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .frow .fnote b{color:var(--fg);font-weight:600}
 label.chk{display:inline-flex;gap:6px;align-items:center;cursor:pointer}
 .out label.chk{display:inline-flex;flex:none;text-transform:none;letter-spacing:0;font:500 13px var(--mono);color:var(--fg)}
@@ -285,6 +290,13 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
         <button class="btn ghost sm" type="button" data-op="svg">Converter e baixar</button>
       </div>
       <div class="frow">
+        <label for="mdScope">Converter para Markdown</label>
+        <select id="mdScope"><option value="all">todas as páginas</option><option value="sel">páginas selecionadas</option></select>
+        <label class="chk" title="Coloca um marcador invisível &lt;!-- página N --&gt; no início de cada página"><input type="checkbox" id="mdMarks"> marcar páginas</label>
+        <button class="btn ghost sm" type="button" data-op="md">Converter</button>
+        <span class="fnote">usa o texto do PDF: títulos, listas, negrito e tabelas simples</span>
+      </div>
+      <div class="frow">
         <label for="rasScope">Exportar como imagem</label>
         <select id="rasScope"><option value="sel">páginas selecionadas</option><option value="all">todas as páginas</option></select>
         <select id="rasFmt" aria-label="Formato da imagem"><option value="jpg">JPG</option><option value="png">PNG</option></select>
@@ -292,6 +304,15 @@ footer{color:var(--dim);font-size:12px;max-width:80ch}
         <button class="btn ghost sm" type="button" data-op="raster">Exportar e baixar</button>
         <span class="fnote">para só um trecho da página, use <b>Recortar</b> antes</span>
       </div>
+    </div>
+    <div class="mdbox" id="mdBox" hidden>
+      <div class="mdbar">
+        <span class="mdinfo" id="mdInfo"></span><span class="mdsp"></span>
+        <button class="btn ghost sm" type="button" id="mdCopy">Copiar</button>
+        <button class="btn sm" type="button" id="mdSave">Baixar .md</button>
+        <button class="btn quiet sm" type="button" id="mdClose">Fechar</button>
+      </div>
+      <textarea id="mdOut" spellcheck="false" aria-label="Markdown gerado (pode editar antes de baixar)"></textarea>
     </div>
     <p class="msg" id="pgMsg" role="status" aria-live="polite"></p>
     <p class="hint">Números são as posições atuais (o número em destaque em cada página). Extrair e dividir usam a ordem e as rotações que estão na tela e não mudam o documento. <b>Nova ordem</b> troca de lugar só as páginas citadas: <b>5,4,7,6</b> troca a 4 com a 5 e a 6 com a 7; <b>10-1</b> inverte tudo. Clique para selecionar (Shift seleciona um intervalo) e arraste para mover. Teclado: espaço seleciona, Alt+←/→ move, Delete remove, Ctrl+Z desfaz.</p>
@@ -746,6 +767,7 @@ function disarm(){ clearTimeout(clearT); const b=$('clearAll'); delete b.dataset
 // ---------- organizador de páginas ----------
 const pgrid=$('pgrid');
 function openPages(id){
+  { const mb=document.getElementById('mdBox'); if(mb&&id!==S.openId) mb.hidden=true; }
   if(ED.d&&ED.d.id!==id) closeEditor(true); if(CR.d&&CR.d.id!==id) $('cropSec').hidden=true;
   S.openId=id; S.sel.clear(); S.lastUid=null;
   renderPages(); renderDocs();
@@ -808,6 +830,7 @@ function op(name){
     case 'edit': return openEditor(d);
     case 'split': return splitDoc(d);
     case 'svg': return exportSvg(d);
+    case 'md': return exportMd(d);
     case 'raster': return exportRaster(d);
     case 'reorder': {
       const r=parseOrder($('newOrder').value,d.pages.length);
@@ -992,6 +1015,169 @@ async function pageRasterSvg(page,p){
   const url=out.toDataURL('image/png'), w=fmtN((1-c.l-c.r)*vp.width/k), h=fmtN((1-c.t-c.b)*vp.height/k); cv.width=cv.height=out.width=out.height=0;
   return SVG_HEAD+`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="${w}pt" height="${h}pt" viewBox="0 0 ${w} ${h}"><image width="${w}" height="${h}" xlink:href="${url}"/></svg>`;
 }
+// ---------- PDF → Markdown (usa o texto do PDF; PDF só de imagem precisa de OCR antes) ----------
+const MD_BULLET=/^[•●○◦▪■□▫‣∙·◆◇►▶➢➤✓✔\-–—*]\s+/;
+const MD_ORD=/^(\d{1,3})[.)]\s+/;
+const MD_ALPHA=/^\(?[a-zA-Z]\)\s+|^\(\d{1,3}\)\s+/;
+const MD_PAGENUM=/^(p[áa]g(ina)?\.?\s*)?\d{1,4}(\s*(de|\/|of)\s*\d{1,4})?$/i;
+// itens de texto de uma página do PDF.js → {items:[{s,x,y,w,size,b}],W,H}
+async function mdPageItems(page){
+  const vp=page.getViewport({scale:1});
+  const tc=await page.getTextContent();
+  try{ await page.getOperatorList(); }catch(_){}
+  const fb={};
+  const isBold=id=>{ if(id in fb) return fb[id]; let b=false;
+    try{ if(page.commonObjs.has(id)){ const f=page.commonObjs.get(id); b=/bold|black|heavy|semibold|demi|negrito/i.test(String(f&&(f.name||f.loadedName)||'')); } }catch(_){}
+    return fb[id]=b; };
+  const items=[];
+  for(const it of tc.items){
+    if(!it.str||!it.str.trim()) continue;
+    const t=it.transform, size=Math.hypot(t[2],t[3])||Math.hypot(t[0],t[1])||10;
+    const [x,y]=vp.convertToViewportPoint(t[4],t[5]);
+    items.push({s:it.str,x,y,w:it.width||it.str.length*size*.5,size,b:isBold(it.fontName)});
+  }
+  return {items,W:vp.width,H:vp.height};
+}
+// agrupa itens em linhas e cada linha em células (blocos separados por um espaço grande)
+function mdLines(items){
+  const arr=items.slice().sort((a,b)=>a.y-b.y||a.x-b.x), lines=[];
+  for(const it of arr){
+    let L=null;
+    for(let k=lines.length-1;k>=Math.max(0,lines.length-4);k--){ const l=lines[k]; if(Math.abs(l.y-it.y)<=Math.max(2,.45*Math.min(l.size,it.size))){ L=l; break; } }
+    if(!L){ L={y:it.y,size:it.size,items:[]}; lines.push(L); }
+    L.items.push(it); L.size=Math.max(L.size,it.size);
+  }
+  lines.forEach(l=>{
+    l.items.sort((a,b)=>a.x-b.x);
+    const cells=[]; let c=null, end=-1e9;
+    for(const it of l.items){
+      const gap=it.x-end;
+      if(!c||gap>Math.max(l.size*1.8,12)){ c={x:it.x,t:'',n:0,b:0}; cells.push(c); }
+      else if(gap>l.size*.12&&!/\s$/.test(c.t)&&!/^\s/.test(it.s)) c.t+=' ';
+      c.t+=it.s; c.n+=it.s.trim().length; if(it.b) c.b+=it.s.trim().length;
+      end=Math.max(end,it.x+it.w);
+    }
+    cells.forEach(c=>{ c.t=c.t.replace(/\s+/g,' ').trim(); });
+    l.cells=cells.filter(c=>c.t);
+    l.text=l.cells.map(c=>c.t).join(' ');
+    l.x0=l.items[0].x;
+    const n=l.cells.reduce((s,c)=>s+c.n,0), b=l.cells.reduce((s,c)=>s+c.b,0);
+    l.bold=n>0&&b/n>.9;
+  });
+  return lines.filter(l=>l.text);
+}
+// texto em duas colunas: lê a coluna da esquerda inteira e depois a da direita
+function mdPageLines(pg){
+  let lines=mdLines(pg.items);
+  const two=lines.filter(l=>l.cells.length===2);
+  if(lines.length>=8&&two.length/lines.length>.6&&two.every(l=>l.cells[0].t.length>20&&l.cells[1].t.length>20)){
+    const xs=two.map(l=>l.cells[1].x).sort((a,b)=>a-b), split=xs[xs.length>>1]-2;
+    lines=mdLines(pg.items.filter(i=>i.x<split)).concat(mdLines(pg.items.filter(i=>i.x>=split)));
+  }
+  return lines;
+}
+function mdEsc(s){ return s.replace(/([\\`*<])/g,'\\$1'); }
+function mdEscLead(s){ return s.replace(/^(#{1,6}\s|>|[-+]\s|\d+[.)]\s)/,m=>'\\'+m); }
+function mdTable(rows){
+  const tol=Math.max(8,rows[0].size*1.5), starts=[];
+  rows.flatMap(r=>r.cells.map(c=>c.x)).sort((a,b)=>a-b).forEach(x=>{ if(!starts.length||x-starts[starts.length-1]>tol) starts.push(x); });
+  const grid=rows.map(r=>{ const a=starts.map(()=>''); r.cells.forEach(c=>{ let k=0; starts.forEach((s,i)=>{ if(c.x+tol>=s) k=i; }); a[k]=(a[k]?a[k]+' ':'')+c.t; }); return a; });
+  const cols=starts.map((_,i)=>i).filter(i=>grid.some(r=>r[i]));
+  const fmt=r=>'| '+cols.map(i=>mdEsc(r[i]).replace(/\|/g,'\\|')).join(' | ')+' |';
+  return [fmt(grid[0]),'| '+cols.map(()=>'---').join(' | ')+' |',...grid.slice(1).map(fmt)].join('\n');
+}
+// pages: [{n, items, W, H}] → {md, stats}
+function mdBuild(pages,opts={}){
+  const P=pages.map(pg=>({n:pg.n,W:pg.W,H:pg.H,lines:mdPageLines(pg)}));
+  // cabeçalhos/rodapés repetidos e números de página
+  const zone=(l,p)=>l.y<p.H*.08||l.y>p.H*.92, key=l=>l.text.toLowerCase().replace(/\d+/g,'#').trim(), cnt={};
+  P.forEach(p=>{ new Set(p.lines.filter(l=>zone(l,p)).map(key)).forEach(k=>{ cnt[k]=(cnt[k]||0)+1; }); });
+  const rep=k=>P.length>=3&&cnt[k]>=Math.max(2,Math.ceil(P.length*.5));
+  let dropped=0;
+  P.forEach(p=>{ p.lines=p.lines.filter(l=>{ const out=zone(l,p)&&(rep(key(l))||MD_PAGENUM.test(l.text)); if(out) dropped++; return !out; }); });
+  // tamanho do corpo de texto e níveis de título
+  const r2=s=>Math.round(s*2)/2, w={};
+  P.forEach(p=>p.lines.forEach(l=>{ w[r2(l.size)]=(w[r2(l.size)]||0)+l.text.length; }));
+  const body=+Object.keys(w).sort((a,b)=>w[b]-w[a])[0]||10;
+  const isHead=l=>l.size>=body*1.18&&l.text.length<=150&&!/[,;]$/.test(l.text)&&l.cells.length<=2;
+  const hs=[...new Set(P.flatMap(p=>p.lines.filter(isHead).map(l=>r2(l.size))))].sort((a,b)=>b-a);
+  const lvl=l=>Math.min(hs.indexOf(r2(l.size))+1,4);
+  const out=[], st={pages:P.length,empty:0,headings:0,tables:0,words:0,dropped};
+  for(const p of P){
+    const L=p.lines; if(!L.length){ st.empty++; continue; }
+    const dys=[]; for(let i=1;i<L.length;i++){ const dy=L[i].y-L[i-1].y; if(dy>0&&dy<L[i].size*3) dys.push(dy); }
+    dys.sort((a,b)=>a-b); const gap=dys.length?dys[dys.length>>1]:body*1.25;
+    // tabela: 2+ linhas seguidas com 2+ células
+    const inTab=new Array(L.length).fill(false);
+    for(let i=0;i<L.length;){ let j=i; while(j<L.length&&L[j].cells.length>=2&&!isHead(L[j])&&(j===i||L[j].y-L[j-1].y<gap*2.6)) j++;
+      if(j-i>=2) for(let k=i;k<j;k++) inTab[k]=true; i=Math.max(j,i+1); }
+    const blocks=[]; let b=null;
+    for(let i=0;i<L.length;i++){
+      const l=L[i], dy=i?l.y-L[i-1].y:1e9;
+      if(inTab[i]){ if(!b||b.type!=='t'){ b={type:'t',rows:[]}; blocks.push(b); } b.rows.push(l); continue; }
+      if(isHead(l)){ const v=lvl(l);
+        if(b&&b.type==='h'&&b.level===v&&dy>0&&dy<l.size*1.8) b.text+=' '+l.text; else { b={type:'h',level:v,text:l.text}; blocks.push(b); }
+        continue; }
+      let m;
+      if((m=l.text.match(MD_BULLET))){ b={type:'li',mark:'-',text:l.text.slice(m[0].length),bold:l.bold,x:l.x0}; blocks.push(b); continue; }
+      if((m=l.text.match(MD_ORD))){ b={type:'li',mark:m[1]+'.',text:l.text.slice(m[0].length),bold:l.bold,x:l.x0}; blocks.push(b); continue; }
+      if(MD_ALPHA.test(l.text)){ b={type:'li',mark:'-',text:l.text,bold:l.bold,x:l.x0}; blocks.push(b); continue; }
+      const cont=b&&(b.type==='p'||b.type==='li')&&dy>0&&dy<=gap*1.45&&Math.abs(l.size-b.size)<1&&!(b.type==='li'&&l.x0<b.x-2);
+      if(cont){
+        if(/[A-Za-zÀ-ÿ]-$/.test(b.text)&&/^[a-zà-ÿ]/.test(l.text)) b.text=b.text.slice(0,-1)+l.text; else b.text+=' '+l.text;
+        b.bold=b.bold&&l.bold;
+      } else { b={type:'p',text:l.text,bold:l.bold,size:l.size}; blocks.push(b); }
+      if(!b.size) b.size=l.size;
+    }
+    if(opts.pageMarks) out.push(`<!-- página ${p.n} -->`);
+    let prevLi=false;
+    for(const k of blocks){
+      let s;
+      if(k.type==='h'){ s='#'.repeat(k.level)+' '+mdEsc(k.text); st.headings++; }
+      else if(k.type==='t'){ s=mdTable(k.rows); st.tables++; }
+      else { let t=mdEsc(k.text); if(k.bold&&t.length<200) t='**'+t+'**';
+        s=k.type==='li'?k.mark+' '+t:mdEscLead(t); }
+      if(k.type==='li'&&prevLi) out[out.length-1]+='\n'+s; else out.push(s);
+      prevLi=k.type==='li';
+      st.words+=(k.text||k.rows.map(r=>r.text).join(' ')).split(/\s+/).filter(Boolean).length;
+    }
+  }
+  return {md:out.join('\n\n').replace(/\n{3,}/g,'\n\n').trim()+'\n',stats:st};
+}
+let mdFile='documento.md';
+async function exportMd(d){
+  if(S.busy) return;
+  const all=$('mdScope').value==='all';
+  const idx=d.pages.map((p,i)=>i).filter(i=>all||S.sel.has(d.pages[i].uid));
+  if(!idx.length) return sayPg('Selecione as páginas ou escolha "todas as páginas".','warn');
+  setBusy(true); let task=null;
+  try{
+    task=pdfjs().getDocument({data:d.bytes.slice(),isEvalSupported:false});
+    const pj=await task.promise, pages=[];
+    for(let k=0;k<idx.length;k++){
+      const i=idx[k];
+      sayPg(`Markdown: lendo página ${k+1}/${idx.length}…`); if(k%3===0) await frame();
+      const page=await pj.getPage(d.pages[i].src+1);
+      pages.push({n:i+1,...await mdPageItems(page)}); page.cleanup();
+    }
+    const {md,stats}=mdBuild(pages,{pageMarks:$('mdMarks').checked});
+    if(stats.empty===stats.pages){ $('mdBox').hidden=true;
+      return sayPg('Não encontrei texto nessas páginas. O PDF parece ser digitalizado (só imagem): ele precisa passar por OCR antes de virar Markdown.','warn'); }
+    const b=baseName(d); mdFile=all?`${b}.md`:`${b}_paginas_${compact(idx)}.md`;
+    $('mdOut').value=md; $('mdBox').hidden=false;
+    const parts=[`<b>${nf.format(stats.words)}</b> palavras`,`<b>${stats.headings}</b> título(s)`,`<b>${stats.tables}</b> tabela(s)`];
+    if(stats.dropped) parts.push(`${stats.dropped} cabeçalho(s)/rodapé(s) e nº de página removidos`);
+    $('mdInfo').innerHTML=`${mdFile} · ${parts.join(' · ')}`;
+    sayPg(`Markdown pronto: ${stats.pages} página(s).`+(stats.empty?` ${stats.empty} página(s) sem texto (imagem) ficaram de fora.`:'')+' Confira abaixo, edite se quiser e baixe.',stats.empty?'warn':'');
+    $('mdOut').scrollTop=0; $('mdBox').scrollIntoView({block:'nearest',behavior:'smooth'});
+  }catch(e){ sayPg('Falha ao converter para Markdown: '+(e&&e.message||e),'err'); }
+  finally{ try{ task&&task.destroy(); }catch(_){} setBusy(false); }
+}
+$('mdSave').addEventListener('click',()=>{ const blob=new Blob([$('mdOut').value],{type:'text/markdown;charset=utf-8'}); saveBlob(blob,mdFile); sayPg(`Baixado: ${mdFile} · ${fmtSize(blob.size)}.`); });
+$('mdCopy').addEventListener('click',()=>{ const t=$('mdOut'), done=()=>sayPg('Markdown copiado.');
+  try{ navigator.clipboard.writeText(t.value).then(done,()=>{ t.select(); sayPg('Texto selecionado: use Ctrl+C para copiar.','warn'); }); }
+  catch(_){ t.select(); sayPg('Texto selecionado: use Ctrl+C para copiar.','warn'); } });
+$('mdClose').addEventListener('click',()=>{ $('mdBox').hidden=true; });
 async function exportSvg(d){
   if(S.busy) return;
   const all=$('svgScope').value==='all';
