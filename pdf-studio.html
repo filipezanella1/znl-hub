@@ -1019,8 +1019,10 @@ async function pageRasterSvg(page,p){
 const MD_BULLET=/^[•●○◦▪■□▫‣∙·◆◇►▶➢➤✓✔\-–—*]\s+/;
 const MD_ORD=/^(\d{1,3})[.)]\s+/;
 const MD_ALPHA=/^\(?[a-zA-Z]\)\s+|^\(\d{1,3}\)\s+/;
-const MD_PAGENUM=/^(p[áa]g(ina)?\.?\s*)?\d{1,4}(\s*(de|\/|of)\s*\d{1,4})?$/i;
-// itens de texto de uma página do PDF.js → {items:[{s,x,y,w,size,b}],W,H}
+// nº de página/folha solto: "3", "3a", "Página 2 de 5", "pág. 4/9", "Folha 12"
+const MD_PAGENUM=/^((p[áa]g(ina)?|folha|fl)\.?\s*)?\d{1,4}[a-z]?(\s*(de|\/|of)\s*\d{1,4})?$/i;
+const MD_RULE=/^[_\s]{6,}$/;
+// itens de texto de uma página do PDF.js → {items:[{s,x,y,w,size,b,sp}],W,H}
 async function mdPageItems(page){
   const vp=page.getViewport({scale:1});
   const tc=await page.getTextContent();
@@ -1031,36 +1033,59 @@ async function mdPageItems(page){
     return fb[id]=b; };
   const items=[];
   for(const it of tc.items){
-    if(!it.str||!it.str.trim()) continue;
+    if(!it.str) continue;
     const t=it.transform, size=Math.hypot(t[2],t[3])||Math.hypot(t[0],t[1])||10;
     const [x,y]=vp.convertToViewportPoint(t[4],t[5]);
-    items.push({s:it.str,x,y,w:it.width||it.str.length*size*.5,size,b:isBold(it.fontName)});
+    // espaço "de verdade" do PDF: marca que há separação de palavra naquele ponto
+    if(!it.str.trim()){ items.push({s:' ',x,y,w:it.width||size*.25,size,b:false,sp:true}); continue; }
+    const u=mdUnspace(it.str);
+    items.push({s:u,x,y,w:it.width||it.str.length*size*.5,size,b:isBold(it.fontName),ls:u!==it.str,pair:/^\S \S$/.test(it.str.trim())});
   }
   return {items,W:vp.width,H:vp.height};
 }
+// "N e s t e" / "T C E  E N G" (letras espaçadas): junta as letras; espaço duplo vira separação de palavra
+function mdUnspace(s){
+  const t=s.trim(); if(!/^\S( {1,3}\S){2,}$/.test(t)) return s;
+  return t.split(/ {2,}/).map(w=>w.replace(/ /g,'')).join(' ');
+}
+const median=a=>{ if(!a.length) return 0; const s=a.slice().sort((x,y)=>x-y); return s[s.length>>1]; };
 // agrupa itens em linhas e cada linha em células (blocos separados por um espaço grande)
 function mdLines(items){
-  const arr=items.slice().sort((a,b)=>a.y-b.y||a.x-b.x), lines=[];
+  const arr=items.filter(i=>!i.sp||true).slice().sort((a,b)=>a.y-b.y||a.x-b.x), lines=[];
   for(const it of arr){
     let L=null;
     for(let k=lines.length-1;k>=Math.max(0,lines.length-4);k--){ const l=lines[k]; if(Math.abs(l.y-it.y)<=Math.max(2,.45*Math.min(l.size,it.size))){ L=l; break; } }
-    if(!L){ L={y:it.y,size:it.size,items:[]}; lines.push(L); }
-    L.items.push(it); L.size=Math.max(L.size,it.size);
+    if(!L){ if(it.sp) continue; L={y:it.y,size:it.size,items:[]}; lines.push(L); }
+    L.items.push(it); if(!it.sp) L.size=Math.max(L.size,it.size);
   }
   lines.forEach(l=>{
     l.items.sort((a,b)=>a.x-b.x);
-    const cells=[]; let c=null, end=-1e9;
+    // linha com letras espaçadas: palavras de 2 letras ("B R", "k m") também se juntam
+    if(l.items.some(i=>i.ls)) l.items.forEach(i=>{ if(i.pair) i.s=i.s.replace(' ',''); });
+    const solid=l.items.filter(i=>!i.sp);
+    // texto com letras espaçadas ("T C E  E N G"): mede o vão normal entre letras soltas
+    const cg=[];
+    for(let i=1;i<solid.length;i++){ const a=solid[i-1], b=solid[i];
+      if(a.s.trim().length===1&&b.s.trim().length===1){ const g=b.x-(a.x+a.w); if(g>-1&&g<l.size*1.2) cg.push(Math.max(0,g)); } }
+    const spaced=cg.length>=4&&median(cg)>l.size*.06, cgap=spaced?median(cg):0;
+    const cells=[]; let c=null, end=-1e9, prev=null, pend=false;
     for(const it of l.items){
+      if(it.sp){ pend=true; continue; }
       const gap=it.x-end;
-      if(!c||gap>Math.max(l.size*1.8,12)){ c={x:it.x,t:'',n:0,b:0}; cells.push(c); }
-      else if(gap>l.size*.12&&!/\s$/.test(c.t)&&!/^\s/.test(it.s)) c.t+=' ';
+      if(!c||gap>Math.max(l.size*1.8,12)){ c={x:it.x,x1:it.x+it.w,t:'',n:0,b:0}; cells.push(c); pend=false; }
+      else {
+        const letters=prev&&prev.s.trim().length===1&&it.s.trim().length===1;
+        const thr=letters&&spaced?cgap+Math.max(l.size*.18,cgap*.8):l.size*.12;
+        if((pend||gap>thr)&&!/\s$/.test(c.t)&&!/^\s/.test(it.s)) c.t+=' ';
+      }
+      pend=false;
       c.t+=it.s; c.n+=it.s.trim().length; if(it.b) c.b+=it.s.trim().length;
-      end=Math.max(end,it.x+it.w);
+      end=Math.max(end,it.x+it.w); c.x1=end; prev=it;
     }
     cells.forEach(c=>{ c.t=c.t.replace(/\s+/g,' ').trim(); });
     l.cells=cells.filter(c=>c.t);
     l.text=l.cells.map(c=>c.t).join(' ');
-    l.x0=l.items[0].x;
+    l.x0=l.cells.length?l.cells[0].x:0; l.x1=l.cells.length?l.cells[l.cells.length-1].x1:0;
     const n=l.cells.reduce((s,c)=>s+c.n,0), b=l.cells.reduce((s,c)=>s+c.b,0);
     l.bold=n>0&&b/n>.9;
   });
@@ -1071,42 +1096,69 @@ function mdPageLines(pg){
   let lines=mdLines(pg.items);
   const two=lines.filter(l=>l.cells.length===2);
   if(lines.length>=8&&two.length/lines.length>.6&&two.every(l=>l.cells[0].t.length>20&&l.cells[1].t.length>20)){
-    const xs=two.map(l=>l.cells[1].x).sort((a,b)=>a-b), split=xs[xs.length>>1]-2;
+    const split=median(two.map(l=>l.cells[1].x))-2;
     lines=mdLines(pg.items.filter(i=>i.x<split)).concat(mdLines(pg.items.filter(i=>i.x>=split)));
   }
   return lines;
 }
-function mdEsc(s){ return s.replace(/([\\`*<])/g,'\\$1'); }
+function mdEsc(s){
+  return s.replace(/([\\`*])/g,'\\$1')
+    .replace(/<(?!(https?:\/\/|[^\s<>@]+@[^\s<>@]+>))/g,'\\<')   // mantém <email> e <http…> como link
+    .replace(/_{5,}/g,m=>'\\_'.repeat(Math.min(m.length,40)));
+}
 function mdEscLead(s){ return s.replace(/^(#{1,6}\s|>|[-+]\s|\d+[.)]\s)/,m=>'\\'+m); }
+// colunas da tabela: junta as faixas horizontais que se sobrepõem (números alinhados à direita caem na mesma coluna)
 function mdTable(rows){
-  const tol=Math.max(8,rows[0].size*1.5), starts=[];
-  rows.flatMap(r=>r.cells.map(c=>c.x)).sort((a,b)=>a-b).forEach(x=>{ if(!starts.length||x-starts[starts.length-1]>tol) starts.push(x); });
-  const grid=rows.map(r=>{ const a=starts.map(()=>''); r.cells.forEach(c=>{ let k=0; starts.forEach((s,i)=>{ if(c.x+tol>=s) k=i; }); a[k]=(a[k]?a[k]+' ':'')+c.t; }); return a; });
-  const cols=starts.map((_,i)=>i).filter(i=>grid.some(r=>r[i]));
-  const fmt=r=>'| '+cols.map(i=>mdEsc(r[i]).replace(/\|/g,'\\|')).join(' | ')+' |';
-  return [fmt(grid[0]),'| '+cols.map(()=>'---').join(' | ')+' |',...grid.slice(1).map(fmt)].join('\n');
+  const maxCells=Math.max(...rows.map(r=>r.cells.length));
+  const iv=rows.flatMap(r=>r.cells.map(c=>[c.x,c.x1])).sort((a,b)=>a[0]-b[0]), cols=[];
+  for(const [a,b] of iv){ const last=cols[cols.length-1]; if(last&&a<=last[1]+2) last[1]=Math.max(last[1],b); else cols.push([a,b]); }
+  let place;
+  if(cols.length>=maxCells) place=c=>{ let k=0; cols.forEach((cl,i)=>{ if(c.x>=cl[0]-2) k=i; }); return k; };
+  else { // faixas demais emendadas: volta a agrupar pelo início de cada célula
+    const tol=Math.max(8,rows[0].size*1.5), st=[];
+    rows.flatMap(r=>r.cells.map(c=>c.x)).sort((a,b)=>a-b).forEach(x=>{ if(!st.length||x-st[st.length-1]>tol) st.push(x); });
+    cols.length=0; st.forEach(x=>cols.push([x,x]));
+    place=c=>{ let k=0; st.forEach((s,i)=>{ if(c.x+tol>=s) k=i; }); return k; };
+  }
+  const grid=rows.map(r=>{ const a=cols.map(()=>''); r.cells.forEach(c=>{ const k=place(c); a[k]=(a[k]?a[k]+' ':'')+c.t; }); return a; });
+  const use=cols.map((_,i)=>i).filter(i=>grid.some(r=>r[i]));
+  const fmt=r=>'| '+use.map(i=>mdEsc(r[i]).replace(/\|/g,'\\|')).join(' | ')+' |';
+  return [fmt(grid[0]),'| '+use.map(()=>'---').join(' | ')+' |',...grid.slice(1).map(fmt)].join('\n');
 }
 // pages: [{n, items, W, H}] → {md, stats}
 function mdBuild(pages,opts={}){
   const P=pages.map(pg=>({n:pg.n,W:pg.W,H:pg.H,lines:mdPageLines(pg)}));
-  // cabeçalhos/rodapés repetidos e números de página
-  const zone=(l,p)=>l.y<p.H*.08||l.y>p.H*.92, key=l=>l.text.toLowerCase().replace(/\d+/g,'#').trim(), cnt={};
+  // cabeçalhos/rodapés repetidos, nº de página/folha e carimbos idênticos aos da página anterior
+  const zone=(l,p)=>l.y<p.H*.08||l.y>p.H*.92;
+  const key=l=>l.text.toLowerCase().replace(/\b[0-9a-f]{12,}\b/g,'#').replace(/\d+/g,'#').trim(), cnt={};
   P.forEach(p=>{ new Set(p.lines.filter(l=>zone(l,p)).map(key)).forEach(k=>{ cnt[k]=(cnt[k]||0)+1; }); });
   const rep=k=>P.length>=3&&cnt[k]>=Math.max(2,Math.ceil(P.length*.5));
-  let dropped=0;
-  P.forEach(p=>{ p.lines=p.lines.filter(l=>{ const out=zone(l,p)&&(rep(key(l))||MD_PAGENUM.test(l.text)); if(out) dropped++; return !out; }); });
+  let dropped=0, prevStamp=new Set();
+  P.forEach(p=>{
+    const stamp=new Set();
+    p.lines=p.lines.filter(l=>{
+      if(MD_PAGENUM.test(l.text)&&(zone(l,p)||l.text.length<=4&&(l.x0>p.W*.75||l.x1<p.W*.25))){ dropped++; return false; }
+      if(!zone(l,p)) return true;
+      stamp.add(l.text);
+      if(rep(key(l))||prevStamp.has(l.text)){ dropped++; return false; }
+      return true;
+    });
+    prevStamp=stamp;
+  });
   // tamanho do corpo de texto e níveis de título
   const r2=s=>Math.round(s*2)/2, w={};
   P.forEach(p=>p.lines.forEach(l=>{ w[r2(l.size)]=(w[r2(l.size)]||0)+l.text.length; }));
   const body=+Object.keys(w).sort((a,b)=>w[b]-w[a])[0]||10;
-  const isHead=l=>l.size>=body*1.18&&l.text.length<=150&&!/[,;]$/.test(l.text)&&l.cells.length<=2;
+  const isHead=l=>l.size>=body*1.18&&l.text.length<=150&&!/[,;]$/.test(l.text)&&l.cells.length<=2&&!MD_RULE.test(l.text);
   const hs=[...new Set(P.flatMap(p=>p.lines.filter(isHead).map(l=>r2(l.size))))].sort((a,b)=>b-a);
   const lvl=l=>Math.min(hs.indexOf(r2(l.size))+1,4);
   const out=[], st={pages:P.length,empty:0,headings:0,tables:0,words:0,dropped};
   for(const p of P){
     const L=p.lines; if(!L.length){ st.empty++; continue; }
-    const dys=[]; for(let i=1;i<L.length;i++){ const dy=L[i].y-L[i-1].y; if(dy>0&&dy<L[i].size*3) dys.push(dy); }
-    dys.sort((a,b)=>a-b); const gap=dys.length?dys[dys.length>>1]:body*1.25;
+    const gap=median(L.slice(1).map((l,i)=>l.y-L[i].y).filter((dy,i)=>dy>0&&dy<L[i+1].size*3))||body*1.25;
+    // margem direita do bloco de cada linha (linhas que começam perto dela)
+    const edge=l=>{ const xs=L.filter(o=>Math.abs(o.x0-l.x0)<l.size*4&&o.text.length>=30).map(o=>o.x1).sort((a,b)=>a-b);
+      return xs.length?xs[Math.floor((xs.length-1)*.8)]:l.x1; };
     // tabela: 2+ linhas seguidas com 2+ células
     const inTab=new Array(L.length).fill(false);
     for(let i=0;i<L.length;){ let j=i; while(j<L.length&&L[j].cells.length>=2&&!isHead(L[j])&&(j===i||L[j].y-L[j-1].y<gap*2.6)) j++;
@@ -1115,31 +1167,37 @@ function mdBuild(pages,opts={}){
     for(let i=0;i<L.length;i++){
       const l=L[i], dy=i?l.y-L[i-1].y:1e9;
       if(inTab[i]){ if(!b||b.type!=='t'){ b={type:'t',rows:[]}; blocks.push(b); } b.rows.push(l); continue; }
+      if(MD_RULE.test(l.text)){ blocks.push({type:'rule'}); b=null; continue; }   // linha de assinatura
       if(isHead(l)){ const v=lvl(l);
         if(b&&b.type==='h'&&b.level===v&&dy>0&&dy<l.size*1.8) b.text+=' '+l.text; else { b={type:'h',level:v,text:l.text}; blocks.push(b); }
         continue; }
       let m;
-      if((m=l.text.match(MD_BULLET))){ b={type:'li',mark:'-',text:l.text.slice(m[0].length),bold:l.bold,x:l.x0}; blocks.push(b); continue; }
-      if((m=l.text.match(MD_ORD))){ b={type:'li',mark:m[1]+'.',text:l.text.slice(m[0].length),bold:l.bold,x:l.x0}; blocks.push(b); continue; }
-      if(MD_ALPHA.test(l.text)){ b={type:'li',mark:'-',text:l.text,bold:l.bold,x:l.x0}; blocks.push(b); continue; }
-      const cont=b&&(b.type==='p'||b.type==='li')&&dy>0&&dy<=gap*1.45&&Math.abs(l.size-b.size)<1&&!(b.type==='li'&&l.x0<b.x-2);
+      if((m=l.text.match(MD_BULLET))){ b={type:'li',mark:'-',text:l.text.slice(m[0].length),bold:l.bold,x:l.x0,size:l.size,last:l}; blocks.push(b); continue; }
+      if((m=l.text.match(MD_ORD))){ b={type:'li',mark:m[1]+'.',text:l.text.slice(m[0].length),bold:l.bold,x:l.x0,size:l.size,last:l}; blocks.push(b); continue; }
+      if(MD_ALPHA.test(l.text)){ b={type:'li',mark:'-',text:l.text,bold:l.bold,x:l.x0,size:l.size,last:l}; blocks.push(b); continue; }
+      let cont=b&&(b.type==='p'||b.type==='li')&&dy>0&&dy<=gap*1.45&&Math.abs(l.size-b.size)<1&&!(b.type==='li'&&l.x0<b.x-2);
+      if(cont){ // linha anterior terminou bem antes da margem: o parágrafo acabou ali
+        const pl=b.last, word=(l.text.split(' ')[0]||'').length*l.size*.5;
+        if(!/-$/.test(pl.text)&&pl.x1+word+l.size*.6<edge(pl)) cont=false;
+        if(/[.:;!?]$/.test(pl.text)&&b.bold!==l.bold) cont=false;
+      }
       if(cont){
         if(/[A-Za-zÀ-ÿ]-$/.test(b.text)&&/^[a-zà-ÿ]/.test(l.text)) b.text=b.text.slice(0,-1)+l.text; else b.text+=' '+l.text;
-        b.bold=b.bold&&l.bold;
-      } else { b={type:'p',text:l.text,bold:l.bold,size:l.size}; blocks.push(b); }
-      if(!b.size) b.size=l.size;
+        b.bold=b.bold&&l.bold; b.last=l;
+      } else { b={type:'p',text:l.text,bold:l.bold,size:l.size,last:l}; blocks.push(b); }
     }
     if(opts.pageMarks) out.push(`<!-- página ${p.n} -->`);
     let prevLi=false;
     for(const k of blocks){
       let s;
-      if(k.type==='h'){ s='#'.repeat(k.level)+' '+mdEsc(k.text); st.headings++; }
+      if(k.type==='rule') s='\\_'.repeat(30);
+      else if(k.type==='h'){ s='#'.repeat(k.level)+' '+mdEsc(k.text); st.headings++; }
       else if(k.type==='t'){ s=mdTable(k.rows); st.tables++; }
       else { let t=mdEsc(k.text); if(k.bold&&t.length<200) t='**'+t+'**';
         s=k.type==='li'?k.mark+' '+t:mdEscLead(t); }
       if(k.type==='li'&&prevLi) out[out.length-1]+='\n'+s; else out.push(s);
       prevLi=k.type==='li';
-      st.words+=(k.text||k.rows.map(r=>r.text).join(' ')).split(/\s+/).filter(Boolean).length;
+      if(k.type!=='rule') st.words+=(k.text||k.rows.map(r=>r.text).join(' ')).split(/\s+/).filter(Boolean).length;
     }
   }
   return {md:out.join('\n\n').replace(/\n{3,}/g,'\n\n').trim()+'\n',stats:st};
