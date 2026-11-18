@@ -16,6 +16,9 @@ Central de acesso às ferramentas do Filipe, publicada no Cloudflare Pages.
 | `dwg/` | Arquivos do DWG Viewer: `worker.js` (lê e monta o desenho fora da tela) e `lib/` com o leitor LibreDWG (`libredwg/`, GPL, via @mlightcad/libredwg-web) e o conversor `dwgconv` (acadrust compilado para WebAssembly, MPL-2.0). Fonte do conversor: crate Rust com `acadrust` + `wasm-bindgen`, função `convert(bytes, versão, formato)` |
 | `normas/` | `catalogo.json` (gerado pelo coletor) e `coletor/coletar.py`, que lê as páginas oficiais de cada órgão. `abnt.json` vem de `coletor/abnt.py`, que lê o texto de cada PDF do catálogo, anota as NBR citadas e confere título/situação no catálogo da Target (revenda autorizada ABNT); `abnt-cache.json` guarda o que já foi lido, então só documentos novos são baixados. PDFs abertos só entram de fonte oficial (lista `LIVRES` no script). O workflow `.github/workflows/normas.yml` roda o coletor toda segunda e publica o catálogo se algo mudou; para rodar à mão: aba Actions → "Atualizar catálogo de normas" → Run workflow |
 
+| `proposta/` | Proposta de redesenho do hub feita com o **taste-skill** (github.com/Leonxlnx/taste-skill): mesma lista de módulos e mesma API, com o sistema de design do kit (`proposta/assets`: tokens, botões, cartões, camada de hover, entrada da abertura, diagrama do hub e ícones reais). Abre em `/proposta/` |
+| `.claude/settings.json` | Liga o plugin taste-skill no Claude Code sempre que este repositório for aberto (o Claude Code pergunta uma vez se confia no marketplace) |
+
 Site estático, sem build. No Cloudflare Pages: framework **None**, comando de build vazio, diretório de saída **/**.
 
 ## Senha e dados na nuvem
